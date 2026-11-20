@@ -14,6 +14,9 @@ export const PROJECT = '';                                     // the Project bo
 export const PROJECT_URL = `https://github.com/users/${OWNER}/projects/${PROJECT}`;
 export const PUBLIC_BOARD = false;                             // true: nothing private may go in an issue, comment or PR
 export const NEEDS_LIVE_TEXT = 'not yet checked on a device';  // what `finish --needs-live` tells the PR
+// Commands the guard hook always denies in this repo (it already asks before commit/push and blocks force-push):
+//   [{ re: String.raw`\bnpm\s+run\s+build\b`, reason: 'A 10-minute build: the owner runs it.' }]
+export const GUARD_DENY = [];
 
 // Milestones, in the order a sprint works them. The key is what an issues file says after
 // `milestone:`; the first value is the title on GitHub.

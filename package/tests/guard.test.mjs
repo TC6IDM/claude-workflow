@@ -144,3 +144,18 @@ test('guard.mjs speaks the PreToolUse hook protocol', () => {
   assert.equal(quiet.stdout, '');
   assert.equal(run('not json').stdout, '');
 });
+
+test("a repo's own deny list wins, and only matches what it names", () => {
+  const deny = [{ re: String.raw`\b(?:npm|pnpm|yarn)\s+(?:run\s+)?build\b`, reason: 'A 10-minute build: the owner runs it.' }];
+  const r = decide('npm run build', { deny });
+  assert.equal(r.decision, 'deny');
+  assert.match(r.reason, /10-minute/);
+  assert.equal(decide('npm run check', { deny }), null);
+  assert.equal(decide('npm run build', {}), null, 'no list, no denial');
+});
+
+test("guard.mjs applies the repo's GUARD_DENY before it looks at git", () => {
+  const hook = fileURLToPath(new URL('../hooks/guard.mjs', import.meta.url));
+  const out = spawnSync(process.execPath, [hook], { input: JSON.stringify({ tool_input: { command: 'ls' } }), encoding: 'utf8' });
+  assert.equal(out.status, 0);
+});

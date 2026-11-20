@@ -1,0 +1,12 @@
+## Shared workflow library (claude-workflow)
+
+The issue, Inbox and sprint scripts, the commit guard hook, their tests{{DESIGN_LIST}} are **not written in this repo**: they come from the owner's `claude-workflow` repo ({{WHERE}}) and are copied in by its `sync.mjs`. `.claude/workflow.lock.json` says which version this repo has.
+
+- **Synced files (never edit them here):** `.claude/skills/{{PREFIX}}-issues/*.mjs` except `config.mjs`, `.claude/skills/{{PREFIX}}-sprint/*.mjs`, both `SKILL.md` files (generated), `.claude/hooks/guard*.mjs`, `.claude/hooks/repo.mjs`, `.claude/tests/*.test.mjs`{{DESIGN_FILES}}. A hand edit is overwritten by the next sync, and `node <claude-workflow>/sync.mjs . --check` fails on it.
+- **This repo's own files (edit freely, a sync never touches them):** `.claude/skills/{{PREFIX}}-issues/config.mjs` (repo, board, milestones, labels, names), `.claude/skills/{{PREFIX}}-issues/SKILL.repo.md` and `.claude/skills/{{PREFIX}}-sprint/SKILL.repo.md` (the repo-specific half of each SKILL.md: change these, then sync to regenerate `SKILL.md`){{DESIGN_OWN}}.
+- **To change how the shared system behaves** (a script bug, a new sprint flag, a guard rule, shared SKILL text): change it in `claude-workflow`, not here. There: edit, `npm test`, bump `VERSION`, commit and push (the owner's yes, as for any commit). Then in **each** repo that uses it: a branch, `node <path to claude-workflow>/sync.mjs . [--design]`, `node --test ".claude/tests/*.test.mjs"`, a PR. Fixing it only in this repo would be lost on the next sync, and the other repos would never get it.
+- **To change only what is specific to this repo** (a label, a milestone, the Project number, the checks a sprint runs, the repo's rules in the SKILL text): edit `config.mjs` or the `SKILL.repo.md` file here. No library change.
+- **Found a problem in the shared part from here?** Say so to the owner (or log it as an issue in `claude-workflow`) with the repo, the command and the output. Do not patch the synced copy to get unstuck except as a throwaway test, and revert it.
+- **Behind?** `node <path to claude-workflow>/sync.mjs . --check` says whether this repo's synced files match the library. Run it before starting a sprint on a long-idle repo, and after pulling the library.
+- **{{PRIVACY}}**
+- The first-time setup of another repo is in `claude-workflow`'s README ("Adding a repo").

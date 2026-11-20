@@ -95,9 +95,11 @@ export function sprintPlace(state, place, home, now = Date.now()) {
  *        places: [{ toplevel, branch }] for every checkout the command touches
  *        (guard.mjs fills it in; without it, `branch` in this repo), home: this repo's toplevel }.
  */
-export function decide(cmd, { branch = '', state = null, now = Date.now(), places = null, home = '', name = 'this repo', prefix = 'sprint' } = {}) {
+export function decide(cmd, { branch = '', state = null, now = Date.now(), places = null, home = '', name = 'this repo', prefix = 'sprint', deny = [] } = {}) {
   if (typeof cmd !== 'string' || !cmd.trim()) return null;
   if (isForcePush(cmd)) return { decision: 'deny', reason: `Force-push is blocked in ${name}. Ask the owner, and do it by hand if they agree.` };
+  // The repo's own hard denials (config.mjs GUARD_DENY: [{ re: 'regex source', reason }]), e.g. a build that takes 40 minutes.
+  for (const d of deny) if (new RegExp(d.re).test(cmd)) return { decision: 'deny', reason: d.reason };
   const where = places?.length ? places : [{ toplevel: home, branch }];
   if (isPush(cmd) && !hasRefspec(cmd) && where.some(p => p.branch === 'main')) {
     return { decision: 'deny', reason: 'Bare `git push` from main is blocked. Name the branch (`git push origin main:main`), after asking.' };
