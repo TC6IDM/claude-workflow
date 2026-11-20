@@ -105,8 +105,8 @@ linkedRepoOf BOARD boardFields`, plus the guard's two options:
 | Repo | Prefix | Design | Guard | Branch / PR |
 |---|---|---|---|---|
 | EzAutoApply (public) | `ezaa` | not installed (its UI is a side panel; add `--design` when a redesign starts) | main/upstream ask | `chore/claude-workflow`, PR #121 |
-| Ride The Bus (private) | `rtb` | yes (`rtb-visual-redesign`; sweep config = the old `layout-audit.mjs` walker) | ask always, builds denied | `chore/claude-workflow` |
-| PTrainr (private, repo `PTrainer`) | `ptrainr` | yes (`ptrainr-visual-redesign`, renamed from `ptrainr-redesign`; its walker is `layout.config.mjs`) | ask always | `chore/claude-workflow` |
+| Ride The Bus (private) | `rtb` | yes (`rtb-visual-redesign`; sweep config = the old `layout-audit.mjs` walker) | ask always, builds denied | `chore/claude-workflow`, PR Ride-The-Bus#92 |
+| PTrainr (private, repo `PTrainer`) | `ptrainr` | yes (`ptrainr-visual-redesign`, renamed from `ptrainr-redesign`; its walker is `layout.config.mjs`) | ask always | `chore/claude-workflow`, PR PTrainer#556 |
 
 ## What a public repo may say
 
