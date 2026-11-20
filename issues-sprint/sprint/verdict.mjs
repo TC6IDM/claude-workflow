@@ -134,3 +134,59 @@ export function misSized(rows, averages, min = 3) {
   }
   return out;
 }
+
+// ---------- the checkpoint's decision questions ----------
+
+/** When a limit resets, short: "8:00 PM" on the same day, "Sun 9:00 AM" on another; null without a time. */
+export function resetLabel(iso, now = new Date(), timeZone) {
+  if (!iso) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  const day = d => d.toLocaleDateString('en-US', { timeZone });
+  const time = at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone });
+  return day(at) === day(now) ? time : `${at.toLocaleDateString('en-US', { weekday: 'short', timeZone })} ${time}`;
+}
+
+/** "5-hour 77% (resets 8:00 PM), weekly 39% (resets Sun 9:00 AM)" for one reading. */
+export function readingLine(r, now = new Date(), timeZone) {
+  const pct = v => (v ?? '?') + '%';
+  const when = iso => { const l = resetLabel(iso, now, timeZone); return l ? ` (resets ${l})` : ''; };
+  return `5-hour ${pct(r.session)}${when(r.sessionResets)}, weekly ${pct(r.weekly)}${when(r.weeklyResets)}`;
+}
+
+/** The hidden mark on the checkpoint's questions comment, so a resumed sprint finds it. */
+export const DECISIONS_MARK = '<!-- sprint-decisions -->';
+
+/**
+ * The one PR comment a checkpoint posts: every open question with its options,
+ * the recommended one and any artifact link. null when nothing is open.
+ */
+export function decisionsComment(questions, attribution = '') {
+  const open = (questions || []).filter(q => !q.posted);
+  if (!open.length) return null;
+  const lines = [DECISIONS_MARK, '## Decisions waiting', 'Answer under this comment (a number and a letter is enough, e.g. "1 B"); the sprint reads the answers when it resumes.', ''];
+  open.forEach((q, i) => {
+    lines.push(`${i + 1}. ${q.issue ? `**#${q.issue}:** ` : ''}${q.text}`);
+    (q.options || []).forEach((o, k) => {
+      const letter = String.fromCharCode(65 + k);
+      const recommended = q.recommend && (q.recommend === o || q.recommend.toUpperCase() === letter);
+      lines.push(`   - ${letter}. ${o}${recommended ? ' **(recommended)**' : ''}`);
+    });
+    if (q.recommend && !(q.options || []).some((o, k) => q.recommend === o || q.recommend.toUpperCase() === String.fromCharCode(65 + k))) lines.push(`   - Recommended: ${q.recommend}`);
+    if (q.link) lines.push(`   - Mock-ups: ${q.link}`);
+  });
+  if (attribution) lines.push('', attribution);
+  return lines.join('\n');
+}
+
+/**
+ * The comments after the last questions post: [{ author, at, body, url }]. Empty
+ * when no post was made, or nobody has answered since. `seen` skips ones shown already.
+ */
+export function answersSince(comments, seen = null) {
+  const list = comments || [];
+  let last = -1;
+  list.forEach((c, i) => { if (String(c.body || '').includes(DECISIONS_MARK)) last = i; });
+  if (last < 0) return [];
+  return list.slice(last + 1).filter(c => !String(c.body || '').includes(DECISIONS_MARK) && (!seen || c.at > seen));
+}

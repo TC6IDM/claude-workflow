@@ -64,6 +64,11 @@ node .claude/skills/{{PREFIX}}-sprint/sprint.mjs start [--issues 12,34,56 [--onl
    `Inbox:` line. When something is waiting, do the Inbox pass (`{{PREFIX}}-issues`
    SKILL.md, "The Inbox issue") before taking an issue. Never during an issue's
    build, only between issues; at `STOP`, leave it for the first wake under the line.
+   **Answers next.** When `next` prints `ANSWERS on PR #P` (comments under the
+   last checkpoint's questions, read on the first wake after a checkpoint and
+   after `start --here`), each is the owner's decision: act on it before
+   choosing (`unskip` and build, or record it on its issue) and say so in the
+   next `finish` note.
 1. `sprint.mjs next`: the budget line, the room left, the average cost of an
    issue so far, and the candidates (named first, then: open, `who:claude`, not
    an epic or decision, no `status:` label, yours or unassigned; by milestone,
@@ -153,7 +158,11 @@ A checkpoint is a pause, not an end. In this order:
    carry on.
 3. **The PR:** write what the issues add up to in `<scratchpad>/intro.md`, then
    `sprint.mjs checkpoint --title "<what they add up to>" --intro-file <scratchpad>/intro.md`.
-   Nothing finished → no PR, and it says so.
+   Nothing finished → no PR, and it says so. The Usage section gives both
+   limits at the start and at the last reading, each with when it resets.
+   **The questions go on the PR:** the same command posts every open question
+   (`sprint.mjs ask`) as one comment on the PR, lettered options, the recommended
+   one marked, the mock-ups link for a visual choice. Nothing open: no comment.
 4. **Issues:** finished ones are In Review already. One being given up gets a
    comment with a **Next** section and stays In Progress. Then `work.mjs tidy`.
 5. **Pausing (keep-going):** one line to the person (a push notification if the
@@ -184,8 +193,9 @@ Wakes need the session open and the computer awake. Start an overnight run as
 
 Never stop to ask (`AskUserQuestion` or "should I…?") during a sprint: it stalls
 for hours. Take the conventional default and note it in the In Review note, or
-skip the issue. Collect every question with `sprint.mjs ask "…"`; the end asks
-them all. A staged secret or a judgment-call merge conflict: park the issue on
+skip the issue. Collect every question with
+`sprint.mjs ask "…" --options "A | B" --recommend A [--link <mock-ups>]`; each
+checkpoint posts them on the PR and the end asks them all. A staged secret or a judgment-call merge conflict: park the issue on
 `wip/issue-N`, `ask`, carry on. A permission prompt or refusal: `ask` about the
 command so it can be allowed in `.claude/settings.json`.
 

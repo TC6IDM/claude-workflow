@@ -90,6 +90,10 @@ merge closes the issue; the board's "Item closed" workflow moves the card).
 2. **While working:** tick the issue's `- [ ]` boxes as each lands; put
    findings and decisions in a comment; log new work found along the way as
    new issues (don't widen this one).
+   **Mock-ups go on their issue.** When an issue needs mock-ups made and chosen
+   between, make them as an artifact and, once they are done, comment the link
+   under that issue with the options and the recommended one, asking for the
+   decision. The issue waits (`status:needs-decision`) until someone answers there.
 3. **When it's done and pushed** (built, the repo's checks
    passing, CLAUDE.md updated if behaviour changed, the PR open):
    `work.mjs review N --note "…"`. The issue **stays open** and its card moves to

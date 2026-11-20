@@ -46,7 +46,10 @@
 //   ... precompact        PreCompact hook: tells the summary what to keep (silent without a sprint).
 //   ... aftercompact      SessionStart "compact" hook: puts the sprint back in Claude's context.
 //   ... status            Where the sprint stands, its PR and the questions waiting.
-//   ... ask "…"           Note a question for the checkpoint instead of stopping to ask it.
+//   ... ask "…" [--options "A | B | C"] [--recommend B] [--link <mock-ups url>]
+//                         Note a question for the checkpoint instead of stopping to ask it. The
+//                         checkpoint posts every open one as one comment on the PR (options, the
+//                         recommended one, the link), and `next` prints the answers under it.
 //   ... summary [--final] The PR body as it stands: Fixes lines, in progress, passed over, usage.
 //   ... wind-down [--undo] Shut the sprint down gently: no new issue; the one in progress is
 //                         finished and committed, then the checkpoint. Run it from any terminal
@@ -64,7 +67,7 @@ import { join, resolve } from 'node:path';
 import https from 'node:https';
 
 import { REPO, REPO_NAME, OWNER, PROJECT, MILESTONE_ORDER as MILESTONES, LINKED_REPOS, linkedRepoOf, NAME, PREFIX, NEEDS_LIVE_TEXT } from './repo.mjs';
-import { STALE_HOURS, KEEP_GOING_STALE_HOURS, DEFAULT_SMALL_AT, DEFAULT_NEW_AT, DEFAULT_STOP_AT, FABLE_LINES, LARGE_SESSION_AT, LARGE_WEEKLY_UNDER, DEFAULT_ISSUE_COST, defaultLines, until, judge, isLarge, largeAllowed, averageCost, finishRefusal, USAGE_FIELD, MEASURED_AFTER, issueUsage, usageNote, sizeAverages, expectedCost, misSized } from './verdict.mjs';
+import { STALE_HOURS, KEEP_GOING_STALE_HOURS, DEFAULT_SMALL_AT, DEFAULT_NEW_AT, DEFAULT_STOP_AT, FABLE_LINES, LARGE_SESSION_AT, LARGE_WEEKLY_UNDER, DEFAULT_ISSUE_COST, defaultLines, until, judge, isLarge, largeAllowed, averageCost, finishRefusal, USAGE_FIELD, MEASURED_AFTER, issueUsage, usageNote, sizeAverages, expectedCost, misSized, readingLine, decisionsComment, answersSince } from './verdict.mjs';
 const DIR = join(tmpdir(), `${PREFIX}-sprint`);
 const STATE = join(DIR, 'state.json');
 const CACHE = join(DIR, 'usage.json');
@@ -183,7 +186,7 @@ function record(s, u, step) {
   // A 5-hour reading well below the last one: the window reset (keep-going carried on past it).
   const prev = s.readings?.at(-1);
   if (prev && typeof prev.session === 'number' && typeof u.session === 'number' && u.session < prev.session - 5) s.resets = (s.resets || 0) + 1;
-  s.readings = [...(s.readings || []), { at: new Date().toISOString(), session: u.session, weekly: u.weekly, step }].slice(-300);
+  s.readings = [...(s.readings || []), { at: new Date().toISOString(), session: u.session, sessionResets: u.sessionResets ?? null, weekly: u.weekly, weeklyResets: u.weeklyResets ?? null, step }].slice(-300);
 }
 
 
@@ -256,8 +259,9 @@ function prBody(s, pr, running) {
   if (s.skipped.length) lines.push('', '## Passed over', ...s.skipped.map(d => `- #${d.n}: ${d.why}`));
   const first = s.readings[0], last = s.readings.at(-1);
   if (first && last) {
-    lines.push('', '## Usage', `- At the start (${new Date(first.at).toLocaleString()}): 5-hour ${percent(first.session)}, weekly ${percent(first.weekly)}`,
-      `- Last reading (${new Date(last.at).toLocaleString()}): 5-hour ${percent(last.session)}, weekly ${percent(last.weekly)}`);
+    // Each reading says when its windows reset, measured from that reading's own time.
+    lines.push('', '## Usage', `- At the start (${new Date(first.at).toLocaleString()}): ${readingLine(first, new Date(first.at))}`,
+      `- Last reading (${new Date(last.at).toLocaleString()}): ${readingLine(last, new Date(last.at))}`);
     if (s.resets) lines.push(`- The 5-hour window reset ${s.resets}× during the sprint`);
   }
   lines.push('', running
@@ -800,6 +804,25 @@ if (action === 'next') {
   } catch {
     console.log('Inbox: could not be read (offline or signed out); run inbox.mjs pending by hand.');
   }
+  // Answers to the last checkpoint's questions: the comments under
+  // that post on the sprint's PR are the maintainer's decisions. Act on each
+  // (unskip and build, or record it on its issue) and say so in the next finish note.
+  if (s && !s.external) {
+    try {
+      const at = s.pr ?? openPr(s.branch)?.number;
+      if (at) {
+        const comments = JSON.parse(sh('gh', ['pr', 'view', String(at), '--repo', REPO, '--json', 'comments'], true)).comments
+          .map(c => ({ author: c.author?.login, at: c.createdAt, body: c.body, url: c.url }));
+        const answers = answersSince(comments, s.answersSeen ?? null);
+        if (answers.length) {
+          console.log(`ANSWERS on PR #${at} to the checkpoint's questions: act on them before choosing (unskip, build, or note them on the issue):`);
+          for (const a of answers) console.log(`  ${a.author} (${new Date(a.at).toLocaleString()}): ${a.body.trim().replace(/\s+/g, ' ').slice(0, 600)}  ${a.url}`);
+          s.answersSeen = answers.at(-1).at;
+          writeState(s);
+        }
+      }
+    } catch { console.log('(the PR\'s comments could not be read; look for answers with gh pr view <PR> --comments)'); }
+  }
   console.log([queue.length ? `named first: ${queue.map(n => `#${n}`).join(' ')}${only ? ' (only these)' : ''}` : '',
     only ? '' : mine ? (mineThenOpen(s) ? 'then issues assigned to you, then unassigned ones (never anyone else\'s)' : 'then only issues assigned to you') : 'then issues assigned to you and unassigned ones (never anyone else\'s)'].filter(Boolean).join('; '));
   if (j.used !== null) console.log(`room before checkpoint: ${j.stopAt - j.used}% · an issue has cost ${cost ? `${cost}% on average this sprint` : `~${DEFAULT_ISSUE_COST}% (a guess until one is measured)`}`);
@@ -971,9 +994,15 @@ if (action === 'status') {
 // Questions wait for the checkpoint (maintainer, 2026-11-13): a sprint never
 // stops to ask; it notes the question here and carries on. `status` lists them.
 if (action === 'ask') {
-  const text = args.slice(1).join(' ').trim();
-  if (!text) { console.log('usage: sprint.mjs ask "<question, with the issue number>"'); process.exit(1); }
-  s.questions = [...(s.questions || []), { at: new Date().toISOString(), issue: s.current?.n ?? null, text }];
+  const valued = new Set(['--options', '--recommend', '--link', '--issue']);
+  const text = args.slice(1).filter((a, i, all) => !valued.has(a) && !valued.has(all[i - 1])).join(' ').trim();
+  if (!text) { console.log('usage: sprint.mjs ask "<question, with the issue number>" [--options "A | B"] [--recommend B] [--link <url>] [--issue N]'); process.exit(1); }
+  const options = opt('options') ? opt('options').split('|').map(o => o.trim()).filter(Boolean) : [];
+  const q = { at: new Date().toISOString(), issue: Number(opt('issue')) || s.current?.n || null, text };
+  if (options.length) q.options = options;
+  if (opt('recommend')) q.recommend = opt('recommend');
+  if (opt('link')) q.link = opt('link');
+  s.questions = [...(s.questions || []), q];
   writeState(s);
   console.log(`noted (${s.questions.length} waiting for the checkpoint). Carry on: take the default or skip the issue.`);
   process.exit(0);
@@ -1011,6 +1040,21 @@ if (action === 'checkpoint') {
     }
     const pr = publish(s, false);
     console.log(pr ? `PR #${pr} checkpointed: title, body and usage updated, "${RUNNING}" off and "${CHECKPOINT}" on, so CI runs once` : 'nothing finished: no PR');
+    // Every open question goes onto the PR as one comment; the
+    // sprint reads the answers under it when it resumes (`next`).
+    const asks = decisionsComment(s.questions, ATTRIBUTION);
+    const at = pr ?? openPr(s.branch)?.number;
+    if (asks && at) {
+      const file = join(DIR, 'decisions.md');
+      writeFileSync(file, asks);
+      try {
+        const url = sh('gh', ['pr', 'comment', String(at), '--repo', REPO, '--body-file', file]);
+        for (const q of s.questions) q.posted = true;
+        s.answersSeen = new Date().toISOString();
+        writeState(s);
+        console.log(`decisions: ${s.questions.length} question${s.questions.length === 1 ? '' : 's'} posted on PR #${at} (${url})`);
+      } catch (e) { console.log(`decisions: could not comment on PR #${at} (${String(e.message).split('\n')[0]}); post them by hand`); }
+    } else if (asks) console.log('decisions: no PR to post them on; ask them in the summary');
   }
   const jc = judge(u, s);
   console.log(jc.line);

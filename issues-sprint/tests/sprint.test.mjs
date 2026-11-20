@@ -126,3 +126,51 @@ test('mis-sized issues sit nearer another size average', () => {
   assert.deepEqual(odd.map(o => [o.n, o.looks]), [[20, 'M']], 'L has too few measured to judge');
   assert.deepEqual(misSized(rows.slice(0, 3), sizeAverages(rows.slice(0, 3))), [], 'one size alone says nothing');
 });
+
+// ---------- the checkpoint's decisions and the reset times ----------
+import { resetLabel, readingLine, decisionsComment, answersSince, DECISIONS_MARK } from '../skills/__P__-sprint/verdict.mjs';
+
+test('reset times: the time alone on the same day, the weekday on another', () => {
+  const now = new Date('2026-11-20T15:00:00Z');
+  assert.equal(resetLabel('2026-11-20T20:00:00Z', now, 'UTC'), '8:00 PM');
+  assert.equal(resetLabel('2026-11-22T09:00:00Z', now, 'UTC'), 'Sun 9:00 AM');
+  assert.equal(resetLabel(null, now, 'UTC'), null);
+  assert.equal(resetLabel('not a date', now, 'UTC'), null);
+});
+
+test('a reading says when each window resets, and leaves it out when unknown', () => {
+  const now = new Date('2026-11-20T15:00:00Z');
+  assert.equal(readingLine({ session: 77, sessionResets: '2026-11-20T20:00:00Z', weekly: 39, weeklyResets: '2026-11-22T09:00:00Z' }, now, 'UTC'),
+    '5-hour 77% (resets 8:00 PM), weekly 39% (resets Sun 9:00 AM)');
+  assert.equal(readingLine({ session: 5, weekly: null }, now, 'UTC'), '5-hour 5%, weekly ?%');
+});
+
+test('the decisions comment: options lettered, the recommended one marked, the link, nothing when none are open', () => {
+  assert.equal(decisionsComment([]), null);
+  assert.equal(decisionsComment([{ text: 'old', posted: true }]), null);
+  const c = decisionsComment([
+    { issue: 12, text: 'Which header?', options: ['Compact', 'Large'], recommend: 'A', link: 'https://example.com/mock' },
+    { text: 'Merge conflict in x', recommend: 'keep main' },
+  ], 'attrib');
+  assert.ok(c.startsWith(DECISIONS_MARK));
+  assert.match(c, /1\. \*\*#12:\*\* Which header\?/);
+  assert.match(c, /A\. Compact \*\*\(recommended\)\*\*/);
+  assert.doesNotMatch(c, /B\. Large \*\*/);
+  assert.match(c, /Mock-ups: https:\/\/example\.com\/mock/);
+  assert.match(c, /2\. Merge conflict in x\n   - Recommended: keep main/);
+  assert.ok(c.endsWith('attrib'));
+});
+
+test('answers are the comments after the last decisions post, minus the ones seen', () => {
+  const list = [
+    { at: '2026-11-20T10:00:00Z', body: 'before' },
+    { at: '2026-11-20T11:00:00Z', body: `${DECISIONS_MARK} first` },
+    { at: '2026-11-20T12:00:00Z', body: 'stale answer' },
+    { at: '2026-11-20T13:00:00Z', body: `${DECISIONS_MARK} second` },
+    { at: '2026-11-20T14:00:00Z', body: '1 A' },
+    { at: '2026-11-20T15:00:00Z', body: '2 keep main' },
+  ];
+  assert.deepEqual(answersSince(list).map(c => c.body), ['1 A', '2 keep main']);
+  assert.deepEqual(answersSince(list, '2026-11-20T14:00:00Z').map(c => c.body), ['2 keep main']);
+  assert.deepEqual(answersSince(list.slice(0, 1)), []);
+});
