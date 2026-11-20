@@ -47,7 +47,10 @@ node .claude/skills/{{PREFIX}}-sprint/sprint.mjs start [--issues 12,34,56 [--onl
   Anything assigned to someone else, or under a parent assigned to someone else,
   is never a candidate. `--mine`: issues assigned to the person first; alone it
   claims nothing unassigned; with `--keep-going` it moves on to unassigned ones
-  after.
+  after. **Only when the person says so** ("and Andrew's too"), `sprint.mjs take-from <login>`
+  lets the sprint take that developer's issues as if they were the person's own
+  (`--undo` takes it back). `unskip 12,34` puts passed-over issues back once their
+  blocker is answered.
 - It refuses a dirty working tree (ask the person: commit it with them, or stash
   it; never discard it), refuses without room in the budget, then makes the
   branch from `origin/main`. `--here` carries on an earlier sprint's branch.
