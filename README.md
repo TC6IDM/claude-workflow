@@ -15,7 +15,7 @@ There are two directions, and nothing else: **down** (a sync copies this package
 
 | | Where it lives | Who edits it |
 |---|---|---|
-| Shared scripts, tests, guard hook, SKILL text, the redesign engine and references | this repo (`package/`, `skill-text/`, `design/`) | here only |
+| Shared scripts, tests, guard hook, SKILL text, the redesign engine and references | this repo (`issues-sprint/`, `design/`) | here only |
 | The copies of those inside each repo (`.claude/skills/<prefix>-issues/*.mjs` and so on) | each repo, committed | nobody: a sync overwrites them |
 | A repo's own values | `config.mjs`, `SKILL.repo.md` files, `layout.config.mjs`, its agents | that repo |
 | Which version a repo has | `.claude/workflow.lock.json` (version, library commit, hash of every synced file) | `sync.mjs` |
@@ -42,7 +42,7 @@ Each repo says this in its own CLAUDE.md, under "Shared workflow library" (the t
 
 ```
 cd Desktop/claude-workflow
-# 1. edit package/, skill-text/, design/ or templates/
+# 1. edit issues-sprint/, design/ or templates/
 npm test                                  # the library's own tests (sync, the layout sweep)
 # 2. bump VERSION (patch for a fix, minor for a new option or script)
 git add -A && git commit -m "..." && git push        # with the owner's yes
@@ -54,23 +54,33 @@ node sync.mjs ../EzAutoApply
 node --test ".claude/tests/*.test.mjs"
 ```
 
-The shared tests (`package/tests/`) are copied into every repo and run there against that repo's own
+The shared tests (`issues-sprint/tests/`) are copied into every repo and run there against that repo's own
 `config.mjs`, so a bad value in a config fails in that repo's CI-less `node --test` run, not in a sprint.
 
 ## What is in it
 
+Two halves, each in its own folder, plus what they share:
+
+```
+issues-sprint/   issues, Inbox, sprint, the commit guard, their tests, their SKILL text, and an example repo part
+design/          the visual-redesign method: skill text, references, sweep engine, agents, third-party skill list
+templates/       starting files for a new repo (config, SKILL.repo.md files, the CLAUDE.md section)
+sync.mjs         copies both halves into a repo; tests/ tests sync.mjs and the sweep engine
+```
+
+
 | Path | What |
 |---|---|
-| `package/issues/` | `create-issues`, `sync-board`, `work`, `inbox` (+ `inbox-rules`), `watch-video`, `bootstrap` (+ `board-plan`). The newest of the three copies (EzAutoApply's, which already had Ride The Bus's `--label`/`--external`/Fable lines and PTrainr's Inbox). |
-| `package/sprint/` | `sprint.mjs`, `verdict.mjs`. `finish --needs-live` and `--needs-device` are the same flag. |
-| `package/hooks/` | `guard.mjs` + `guard-rules.mjs`: the commit/push/merge rule as a PreToolUse hook; force-push denied; per-repo `GUARD_DENY` and `GUARD_ASK_ALWAYS` (below). |
-| `package/tests/` | 43 tests the three repos never had (guard, Inbox, sprint verdicts, board plan, config shape). |
-| `skill-text/` | The shared text of the `<prefix>-issues` and `<prefix>-sprint` SKILL.md files, with `{{REPO}}`, `{{NAME}}`, `{{PREFIX}}`, `{{PROJECT_URL}}`, `{{NEEDS_LIVE_TEXT}}` filled from the repo's config. |
+| `issues-sprint/issues/` | `create-issues`, `sync-board`, `work`, `inbox` (+ `inbox-rules`), `watch-video`, `bootstrap` (+ `board-plan`). The newest of the three copies (EzAutoApply's, which already had Ride The Bus's `--label`/`--external`/Fable lines and PTrainr's Inbox). |
+| `issues-sprint/sprint/` | `sprint.mjs`, `verdict.mjs`. `finish --needs-live` and `--needs-device` are the same flag. |
+| `issues-sprint/hooks/` | `guard.mjs` + `guard-rules.mjs`: the commit/push/merge rule as a PreToolUse hook; force-push denied; per-repo `GUARD_DENY` and `GUARD_ASK_ALWAYS` (below). |
+| `issues-sprint/tests/` | 43 tests the three repos never had (guard, Inbox, sprint verdicts, board plan, config shape). |
+| `issues-sprint/skill-text/` | The shared text of the `<prefix>-issues` and `<prefix>-sprint` SKILL.md files, with `{{REPO}}`, `{{NAME}}`, `{{PREFIX}}`, `{{PROJECT_URL}}`, `{{NEEDS_LIVE_TEXT}}` filled from the repo's config. |
 | `design/visual-redesign/` | The redesign method: `skill.shared.md` (the loop), `references/` (comparison page, building, traps, audio auditions), `scripts/` (the layout sweep engine, the axe sweep, `replace.cjs`). |
 | `design/agents/` | Starter `today-capture` and `visual-qa` agents (a repo fills in its servers and states). |
 | `design/third-party-skills.json`, `design/skills.mjs` | Which third-party design skills the method calls, by step, and unreviewed candidates. `node design/skills.mjs --repo <path>`. |
 | `templates/` | Starting `config.mjs`, the `SKILL.repo.md` files, the design repo part, and the CLAUDE.md section. |
-| `examples/ezautoapply/` | EzAutoApply's repo-owned SKILL parts, as split from its old SKILL.md files. |
+| `issues-sprint/examples/ezautoapply/` | EzAutoApply's repo-owned SKILL parts, as split from its old SKILL.md files. |
 | `tests/` | `sync` and the layout sweep (it plants defects in fixture pages and checks the sweep reports them). `npm test`. |
 
 ## Adding a repo
