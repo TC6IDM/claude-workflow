@@ -1,6 +1,6 @@
 # Traps visual work has already sprung
 
-Every entry cost time at least once, in Ride The Bus (RTB) or PTrainr (PTR). Most real
+Every entry cost time at least once, in the projects this method was built on. Most real
 findings in a sweep or a review turn out to be one of these, and so are most false ones: read
 the group that matches what you are changing before you start, and again when something
 looks wrong. A repo adds its own (framework-specific ones especially) under "In this repo".
@@ -19,10 +19,7 @@ looks wrong. A repo adds its own (framework-specific ones especially) under "In 
 
 ## 1. The cascade and specificity
 
-- **A later rule of equal specificity wins silently.** RTB: `.choice-row.locked` loaded after
-  the takeover's dim and beat it for months. PTR: `.modal-card label { display: grid }` stacked
-  radios over their words; `.set-cell > span { display: none }` also hid the RPE picker, whose
-  wrapper is a span. After a rule by element type or a new state rule, list what else matches
+- **A later rule of equal specificity wins silently.** A locked-state rule loaded after a dimming rule and beat it for months; `.modal-card label { display: grid }` stacked radios over their words; `.set-cell > span { display: none }` also hid a picker whose wrapper was a span. After a rule by element type or a new state rule, list what else matches
   and in which order the sheets load.
 - **A `<button>`, `<input>` or `<select>` does not inherit `font-family`** (or size): the UA's
   `font: 400 13.333px Arial` wins, and its size half fixes a line box that never scales. Say
@@ -30,27 +27,24 @@ looks wrong. A repo adds its own (framework-specific ones especially) under "In 
   catches it.
 - **Grid and flex children default to `min-width: auto`**: a `<select>` or a long word widens
   its card past the screen. Use `minmax(0, 1fr)` and `min-width: 0`.
-- **A component framework may scope styles** (RTB's Svelte: a stylesheet only styles the
-  component that imports it, and an unused selector fails the gate; an apostrophe in a CSS
+- **A component framework may scope styles** (Svelte, for one: a stylesheet only styles the component that imports it, and an unused selector fails the gate; an apostrophe in a CSS
   comment breaks the parser pointing somewhere else). Draw new markup inside the component
   whose sheet styles the parts you reuse.
 
 ## 2. Layers, filters and painting
 
-- **A `filter` makes a stacking context and clips what sticks out** (RTB: a suit chip cut at
-  the seam). Put the filter on the part that needs it, and lighten a colour with relative
+- **A `filter` makes a stacking context and clips what sticks out** (a chip cut at a seam). Put the filter on the part that needs it, and lighten a colour with relative
   colour syntax instead of `brightness()`.
 - **Angles drawn on a squashed box are wrong.** Draw it round, then squash with a transform.
 - **Text behind a semi-transparent layer stays legible.** A settled number read through a
   veil. Hide it outright; do not count on a veil to cover it.
-- **Lettered, not lit** (RTB's rule, a good default): no glow, bloom or halo; light from one
+- **Lettered, not lit** (one project's rule, a good default): no glow, bloom or halo; light from one
   direction, edges lit and shaded.
 
 ## 3. Layout, sizes and scrolling
 
 - **A narrow desktop window is not a phone.** Phones need `isMobile` + `hasTouch`; a bare
-  resize keeps hover and a fine pointer, and the 44px touch-target rules never apply (RTB's
-  bar came out 11-20px short; PTR's touch rules did not fire).
+  resize keeps hover and a fine pointer, and the 44px touch-target rules never apply (a bar came out 11-20px short; touch rules did not fire).
 - **A touch laptop reports `hover: none`.** Gate hover on `any-hover`, never `hover: hover`.
 - **`position: sticky` sticks to the scroller's *content* edge**: card padding leaves a strip
   where fields scroll past under a sticky action bar. Move the padding into the bar, in the
@@ -64,7 +58,7 @@ looks wrong. A repo adds its own (framework-specific ones especially) under "In 
 - **A layout must not move under the user**: a new readout line needs an empty state that
   keeps its height; overlays use transform and opacity.
 - **Clamp floors**: when a scaled layout bottoms out on a `clamp()` floor, it stops scaling
-  and starts restructuring (RTB: every Popout S defect). Look for the floor first.
+  and starts restructuring (every small-window defect in one project). Look for the floor first.
 
 ## 4. Languages
 
@@ -91,7 +85,7 @@ looks wrong. A repo adds its own (framework-specific ones especially) under "In 
   fresh query before measuring. A dev server can serve a stale stylesheet to a driver:
   restart it.
 - A preview frame in a desktop browser has gutter scrollbars; real phones overlay them.
-- A demo that **rotates** per sign-in (PTR's five clients) needs test data for each.
+- A demo that **rotates** per sign-in (five demo clients) needs test data for each.
 
 ## 6. Mock-up pages and the archive
 

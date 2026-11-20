@@ -5,8 +5,9 @@ EzAutoApply (TC6IDM/EzAutoApply#45, #46). Each repo keeps only its own settings;
 and method text come from here, copied in by `sync.mjs` and pinned by a lock file, so a sprint never
 depends on the network.
 
-**This repo is private. EzAutoApply is public.** Nothing in this package may name a private repo's data,
-and a public repo's CLAUDE.md must not quote this repo's contents (see "What a public repo may say").
+**This repo is public**, like EzAutoApply; PTrainr and Ride The Bus are private. So nothing in this package may hold
+a private repo's data, secrets or internals: only shared scripts and method text, with each repo's own values in
+that repo. The same goes for this repo's issues, PRs and commit messages (see "What may go in here").
 
 ## How the repos and this repo communicate (the whole contract)
 
@@ -114,16 +115,19 @@ linkedRepoOf BOARD boardFields`, plus the guard's two options:
 
 | Repo | Prefix | Design | Guard | Branch / PR |
 |---|---|---|---|---|
-| EzAutoApply (public) | `ezaa` | not installed (its UI is a side panel; add `--design` when a redesign starts) | main/upstream ask | `chore/claude-workflow`, PR #121 |
-| Ride The Bus (private) | `rtb` | yes (`rtb-visual-redesign`; sweep config = the old `layout-audit.mjs` walker) | ask always, builds denied | `chore/claude-workflow`, PR Ride-The-Bus#92 |
-| PTrainr (private, repo `PTrainer`) | `ptrainr` | yes (`ptrainr-visual-redesign`, renamed from `ptrainr-redesign`; its walker is `layout.config.mjs`) | ask always | `chore/claude-workflow`, PR PTrainer#556 |
+| EzAutoApply (public) | `ezaa` | not installed (its UI is a side panel; add `--design` when a redesign starts) | main/upstream ask | a `chore/claude-workflow` PR |
+| Ride The Bus (private repo) | `rtb` | yes (`rtb-visual-redesign`; sweep config = the old `layout-audit.mjs` walker) | ask always, builds denied | a `chore/claude-workflow` PR |
+| PTrainr (private, repo `PTrainer`) | `ptrainr` | yes (`ptrainr-visual-redesign`, renamed from `ptrainr-redesign`; its walker is `layout.config.mjs`) | ask always | a `chore/claude-workflow` PR |
 
-## What a public repo may say
+## What may go in here
 
-EzAutoApply's CLAUDE.md names this repo (`claude-workflow`) and says it is private, but does not link it,
-quote it, or paste another repo's private details. Its `config.mjs` and `SKILL.repo.md` files hold only its
-own values. If a shared script ever needs to print something repo-private, it must come from that repo's
-config, not from this package.
+This repo is public. Never put in it, or in its issues, PRs, comments or commit messages: a secret or token,
+personal details, or anything from a private repo that is not already public (its users, data, licence or
+store evidence, credentials, internals). Describe a problem by its shape ("a sticky bar leaves a strip under
+it") and keep the evidence in the repo it came from. Each repo's own values (labels, milestones, board number,
+the checks a sprint runs, its sweep states) live in that repo's `config.mjs`, `SKILL.repo.md` and
+`layout.config.mjs`, never here. If a shared script ever needs to print something repo-private, it must come
+from that repo's config, not from this package.
 
 ## What differed between the three copies (#46, first box)
 
