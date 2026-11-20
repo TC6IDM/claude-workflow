@@ -1,0 +1,44 @@
+{
+  "about": "Third-party design skills the visual-redesign method calls (recorded 2026-11-19 from the Ride The Bus, PTrainr and EzAutoApply checkouts and their skills-lock.json). They are NOT vendored here: each repo installs what it needs with `npx skills add <source>` (see the find-skills skill) and keeps its own lock. `step` is the step of the loop in visual-redesign/skill.shared.md. `installedIn` is what was true on the date above.",
+  "installed": [
+    { "skill": "hallmark", "source": "nutlope/hallmark", "step": "0, 2, 8", "use": "The audits: reads design.md first; found stock neon, cool ink on warm panels, haloed controls; wrote design.md.", "installedIn": ["rtb", "ptrainr", "ezaa"] },
+    { "skill": "impeccable", "source": "pbakaus/impeccable", "step": "2, 7, 8", "use": "Critique and polish against a direction; its finish-review agent checks a build against the approved mock.", "installedIn": ["rtb", "ezaa"] },
+    { "skill": "frontend-design", "source": "anthropics/skills", "step": "3", "use": "Sets each direction's aesthetic before its mock-up so the directions are different ideas.", "installedIn": ["rtb"] },
+    { "skill": "improve-animations", "source": "emilkowalski/skills", "step": "2 (motion)", "use": "The motion audit and self-contained plans.", "installedIn": ["rtb"] },
+    { "skill": "find-animation-opportunities", "source": "emilkowalski/skills", "step": "2, 3 (motion)", "use": "Where motion is missing.", "installedIn": ["rtb"] },
+    { "skill": "design-motion-principles", "source": "kylezantos/design-motion-principles", "step": "2, 3 (motion)", "use": "Per-designer motion reads.", "installedIn": ["rtb"] },
+    { "skill": "emil-design-eng", "source": "emilkowalski/skills", "step": "2, 3 (motion)", "use": "The curves and durations for a direction's Motion fact.", "installedIn": ["rtb"] },
+    { "skill": "animation-vocabulary", "source": "emilkowalski/skills", "step": "3 (motion)", "use": "The name for an effect the owner described.", "installedIn": ["rtb"] },
+    { "skill": "review-animations", "source": "emilkowalski/skills", "step": "7 (motion)", "use": "Reviewing a built animation against the pick.", "installedIn": ["rtb"] },
+    { "skill": "mobile-native", "source": "emilkowalski/skills", "step": "7 (phones)", "use": "The small CSS and meta-tag fixes that make a web app feel installed (sticky hover, 100vh, input zoom, notches).", "installedIn": ["ptrainr", "user"] },
+    { "skill": "design-md", "source": "google-labs-code/stitch-skills", "step": "0, 6", "use": "Writing a DESIGN.md.", "installedIn": ["rtb"] },
+    { "skill": "awesome-design-md", "source": "(bundled; 74 named-site design languages)", "step": "3", "use": "Borrow one technique from a mature design system.", "installedIn": ["rtb", "ezaa"] },
+    { "skill": "ui-ux-pro-max", "source": "nextlevelbuilder/ui-ux-pro-max-skill", "step": "3", "use": "Large style/palette/typography reference; not used in a round yet.", "installedIn": ["rtb"] },
+    { "skill": "design-taste-frontend", "source": "leonxlnx/taste-skill", "step": "3 (public pages)", "use": "Anti-slop art direction for marketing or portfolio pages; a better fit there than for an app or game screen.", "installedIn": ["rtb"] },
+    { "skill": "high-end-visual-design", "source": "leonxlnx/taste-skill (soft-skill)", "step": "3", "use": "Premium visual polish; not used in a round yet.", "installedIn": ["rtb"] },
+    { "skill": "redesign-existing-projects", "source": "(installed in rtb)", "step": "0", "use": "Upgrading an existing project's look; not used in a round yet.", "installedIn": ["rtb"] },
+    { "skill": "web-design-guidelines", "source": "vercel-labs/agent-skills", "step": "2, 8", "use": "Reviewing UI code against the Web Interface Guidelines.", "installedIn": ["rtb", "ezaa", "user"] },
+    { "skill": "accessibility", "source": "(installed in rtb, ezaa and the user's skills)", "step": "2, 8", "use": "WCAG 2.2 audit: contrast, focus, screen readers, touch targets.", "installedIn": ["rtb", "ezaa", "user"] },
+    { "skill": "playwright-cli", "source": "(installed in rtb, ezaa)", "step": "1, 3, 7", "use": "Driving the real product, headless checks of mock-up pages.", "installedIn": ["rtb", "ezaa"] },
+    { "skill": "artifact-design", "source": "(Claude's own, loaded by the Artifact tool)", "step": "4", "use": "The contract for the published comparison page.", "installedIn": ["builtin"] },
+    { "skill": "game-audio / ui-sound-design / sound-engineer", "source": "(installed in rtb)", "step": "1, 7 (sound)", "use": "Synthesis ideas and measuring cues, with the repo's own audio lab.", "installedIn": ["rtb"] }
+  ],
+  "candidates": {
+    "about": "Found with `npx skills find` on 2026-11-19. NOT installed and NOT reviewed: install counts are popularity, not quality, and a skill's text is instructions that run in the agent's context. Read the SKILL.md at the link before `npx skills add`, and only then record it under `installed`.",
+    "items": [
+      { "ref": "emilkowalski/skills@apple-design", "installs": "314K", "fits": "iOS and Apple-platform feel; the same author as the motion skills already used (PTrainr's iOS app)." },
+      { "ref": "jakubkrehel/skills@better-typography", "installs": "44K", "fits": "Type scale, line length, numerals: every redesign's foundation step." },
+      { "ref": "wondelai/skills@refactoring-ui", "installs": "10.7K", "fits": "Hierarchy, spacing and colour fixes for the audit step." },
+      { "ref": "ibelick/ui-skills@fixing-accessibility", "installs": "24K", "fits": "Concrete accessibility fixes after the sweep finds them." },
+      { "ref": "anthropics/knowledge-work-plugins@design-critique", "installs": "6.2K", "fits": "A structured critique for the audit step." },
+      { "ref": "anthropics/knowledge-work-plugins@ux-copy", "installs": "5.3K", "fits": "Microcopy for every new or changed string." },
+      { "ref": "anthropics/knowledge-work-plugins@accessibility-review", "installs": "4.5K", "fits": "A review pass beside the axe sweep." },
+      { "ref": "julianoczkowski/designer-skills@design-tokens", "installs": "6.2K", "fits": "Turning a picked world into tokens." },
+      { "ref": "owl-listener/designer-skills@dark-mode-design", "installs": "2.9K", "fits": "Light/dark pairs; PTrainr's Day and Night." },
+      { "ref": "gamedev-skills/awesome-gamedev-agent-skills@game-ui-ux", "installs": "19K", "fits": "Game HUD and menu conventions (Ride The Bus)." },
+      { "ref": "designed-by-ai/skills@design-mobile-apps", "installs": "1.5M", "fits": "Mobile app design; check overlap with mobile-native before adding." },
+      { "ref": "affaan-m/ecc@browser-qa", "installs": "11.7K", "fits": "Browser-driven QA; check overlap with the visual-qa agent." },
+      { "ref": "pbakaus/impeccable@clarify", "installs": "81K", "fits": "Part of the impeccable family already installed." }
+    ]
+  }
+}
