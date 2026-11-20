@@ -159,3 +159,11 @@ test("guard.mjs applies the repo's GUARD_DENY before it looks at git", () => {
   const out = spawnSync(process.execPath, [hook], { input: JSON.stringify({ tool_input: { command: 'ls' } }), encoding: 'utf8' });
   assert.equal(out.status, 0);
 });
+
+test('askAlways asks before a commit or push on any branch; off, a plain branch is left to the permission rules', () => {
+  assert.equal(d('git commit -m x', { branch: 'feature' }), null);
+  assert.equal(d('git commit -m x', { branch: 'feature', askAlways: true }), 'ask');
+  assert.equal(d('git push origin feature', { branch: 'feature', askAlways: true }), 'ask');
+  assert.equal(d('git status', { branch: 'feature', askAlways: true }), null);
+  assert.equal(d('git commit -m x', { branch: sprint().branch, state: sprint(), askAlways: true }), 'allow', 'a running sprint is still the owner\'s yes');
+});

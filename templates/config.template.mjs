@@ -17,6 +17,9 @@ export const NEEDS_LIVE_TEXT = 'not yet checked on a device';  // what `finish -
 // Commands the guard hook always denies in this repo (it already asks before commit/push and blocks force-push):
 //   [{ re: String.raw`\bnpm\s+run\s+build\b`, reason: 'A 10-minute build: the owner runs it.' }]
 export const GUARD_DENY = [];
+// true: ask before EVERY commit and push outside a running sprint, even where a permission rule would allow it.
+// false: only main, upstream and a sprint's strays ask; the owner's yes in chat plus allow rules cover the rest.
+export const GUARD_ASK_ALWAYS = false;
 
 // Milestones, in the order a sprint works them. The key is what an issues file says after
 // `milestone:`; the first value is the title on GitHub.

@@ -86,7 +86,7 @@ export async function sweepWith(config, env = process.env) {
       if (!h.wants(label)) return;
       await page.waitForTimeout(settle);
       let res;
-      try { res = await check(page, scopeSel); } catch (e) { res = [['audit-error', String(e.message).slice(0, 120)]]; }
+      try { res = await check(page, scopeSel ?? config.measure?.scopeSel ?? null); } catch (e) { res = [['audit-error', String(e.message).slice(0, 120)]]; }
       for (const [kind, detail] of res) findings.push({ label, size: size.join('x'), cls, kind, detail });
       if (env.SHOTS) await page.screenshot({ path: join(OUT, `${cls}-${label.replace(/[\\/]/g, '-')}-${size.join('x')}.png`) }).catch(() => {});
       process.stdout.write('.');
@@ -94,7 +94,8 @@ export async function sweepWith(config, env = process.env) {
     /** Measure one open state through every size of its class (for products that lay out in CSS only). */
     async resizeThrough(page, label, cls, { settle = 160, phoneSettle = 400 } = {}) {
       if (!h.wants(label)) return;
-      for (const size of classes[cls].sizes) {
+      // axe finds the same problems at every width: one size per class is enough.
+      for (const size of axe ? classes[cls].sizes.slice(0, 1) : classes[cls].sizes) {
         await page.setViewportSize({ width: size[0], height: size[1] });
         // Crossing into the phone layout can turn dialogs into sheets that slide up: measuring
         // mid-slide reports them off-screen.

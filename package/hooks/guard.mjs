@@ -46,7 +46,7 @@ const places = gitDirs(cmd, cwd).map(dir => {
   return { toplevel: git(['rev-parse', '--show-toplevel'], at) || at, branch: git(['rev-parse', '--abbrev-ref', 'HEAD'], at) };
 });
 
-const result = decide(cmd, { state, places, home, name: repo.NAME, prefix: repo.PREFIX, deny });
+const result = decide(cmd, { state, places, home, name: repo.NAME, prefix: repo.PREFIX, deny, askAlways: repo.GUARD_ASK_ALWAYS === true });
 if (result) {
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: result.decision, permissionDecisionReason: result.reason },

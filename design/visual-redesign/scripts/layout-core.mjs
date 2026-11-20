@@ -14,7 +14,8 @@
 // from its words).
 //
 // options:
-//   scopeSel      measure only inside this selector (default: the open dialog, else the body)
+//   scopeSel      measure only inside this selector, or the first of a list that exists (an open dialog wins;
+//                 default: the body)
 //   framed        true for an app that must never scroll (a game): also check the vertical axis
 //   floor         { px: 12 }  or  { cssVar: '--type-floor', fallback: 6, phoneFallback: 9,
 //                   phoneQuery: '(orientation: portrait) and (max-width: 620px)' }
@@ -70,7 +71,9 @@ export function measure(options = {}) {
   if (o.framed && de.scrollHeight > de.clientHeight + 1) out.push(['frame-scrolls-y', `by ${de.scrollHeight - de.clientHeight}px`]);
 
   const dialog = [...document.querySelectorAll(o.dialogSel)].pop() || null;
-  const scope = (o.scopeSel && document.querySelector(o.scopeSel)) || dialog || document.body;
+  let scoped = null;
+  for (const sel of [].concat(o.scopeSel || [])) { scoped = document.querySelector(sel); if (scoped) break; }
+  const scope = dialog || scoped || document.body;
 
   const all = [...scope.querySelectorAll('*')].filter(e => !(e instanceof SVGElement) || e.tagName === 'svg');
   const controls = all.filter(e => /^(BUTTON|A|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(e.tagName) || e.getAttribute('role') === 'button').filter(e => shown(e) && !(e.tagName === 'INPUT' && e.type === 'hidden'));
