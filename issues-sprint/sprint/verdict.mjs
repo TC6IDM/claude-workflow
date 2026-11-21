@@ -68,6 +68,17 @@ export function finishRefusal({ n, dirty, subject, note }) {
   return null;
 }
 
+// Why the issue in hand is no longer this sprint's, or null. `begin` checks once, but a
+// sprint paused at a checkpoint resumes hours later, and meanwhile someone may have taken
+// the issue, built it and merged it: carrying on builds it twice and `finish` reopens it.
+// So `finish`, `next` and `budget` ask again: closed, or assigned only to other people.
+export function takenAway({ state, assignees = [], me, also = [] }) {
+  if (state && state !== 'OPEN') return 'closed';
+  const ours = new Set([me, ...also]);
+  if (assignees.length && !assignees.some(a => ours.has(a))) return `assigned to ${assignees.join(', ')}`;
+  return null;
+}
+
 // ---------- usage per issue (#49) ----------
 // The board keeps what each finished issue took ("Usage %": the 5-hour window it
 // used), so the sizes' costs are measured across sprints instead of guessed.

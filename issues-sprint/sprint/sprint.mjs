@@ -26,7 +26,8 @@
 //   ... begin N           Re-checks the assignee on GitHub (exit 4 and skipped if someone else has
 //                         taken it since), then notes the issue and the usage when it started.
 //   ... finish N --note "…" [--needs-live | --needs-device]  After the issue's own commit (refused if the tree is
-//                         dirty or the last commit does not name #N): notes what it cost, pushes, opens
+//                         dirty or the last commit does not name #N; exit 4 if the issue was closed or
+//                         given to someone else since begin, as next and budget also check): notes what it cost, pushes, opens
 //                         the PR on the first issue (labelled "sprint: running", so CI waits; a new one if the last was merged) or updates
 //                         it, and moves the issue to In Review (work.mjs review: the note + the PR).
 //                         --needs-live: nobody has tried it on a live job site yet. The PR still says Fixes
@@ -67,7 +68,7 @@ import { join, resolve } from 'node:path';
 import https from 'node:https';
 
 import { REPO, REPO_NAME, OWNER, PROJECT, MILESTONE_ORDER as MILESTONES, LINKED_REPOS, linkedRepoOf, NAME, PREFIX, NEEDS_LIVE_TEXT } from './repo.mjs';
-import { STALE_HOURS, KEEP_GOING_STALE_HOURS, DEFAULT_SMALL_AT, DEFAULT_NEW_AT, DEFAULT_STOP_AT, FABLE_LINES, LARGE_SESSION_AT, LARGE_WEEKLY_UNDER, DEFAULT_ISSUE_COST, defaultLines, until, judge, isLarge, largeAllowed, averageCost, finishRefusal, USAGE_FIELD, MEASURED_AFTER, issueUsage, usageNote, sizeAverages, expectedCost, misSized, readingLine, decisionsComment, answersSince } from './verdict.mjs';
+import { STALE_HOURS, KEEP_GOING_STALE_HOURS, DEFAULT_SMALL_AT, DEFAULT_NEW_AT, DEFAULT_STOP_AT, FABLE_LINES, LARGE_SESSION_AT, LARGE_WEEKLY_UNDER, DEFAULT_ISSUE_COST, defaultLines, until, judge, isLarge, largeAllowed, averageCost, finishRefusal, takenAway, USAGE_FIELD, MEASURED_AFTER, issueUsage, usageNote, sizeAverages, expectedCost, misSized, readingLine, decisionsComment, answersSince } from './verdict.mjs';
 const DIR = join(tmpdir(), `${PREFIX}-sprint`);
 const STATE = join(DIR, 'state.json');
 const CACHE = join(DIR, 'usage.json');
@@ -435,6 +436,26 @@ function offLimits(n, tree, me, avoid, also = []) {
   return null;
 }
 
+// The issue in hand asked again on GitHub (takenAway): null while it is still this sprint's.
+function lostSince(n, s) {
+  const i = JSON.parse(sh('gh', ['issue', 'view', String(n), '--repo', REPO, '--json', 'state,assignees']));
+  return takenAway({ state: i.state, assignees: i.assignees.map(a => a.login), me: whoAmI(), also: s.takeFrom || [] });
+}
+
+// On a resume (`next`, `budget`): an issue in progress that was closed or taken since is
+// dropped from the sprint, and Claude is told to leave it alone. Never blocks on gh failing.
+function dropIfLost(s) {
+  if (!s?.current || s.external) return;
+  let why = null;
+  try { why = lostSince(s.current.n, s); } catch { return; }
+  if (!why) return;
+  const n = s.current.n;
+  s.skipped.push({ n, why: `${why} while the sprint was paused` });
+  s.current = null;
+  writeState(s);
+  console.log(`TAKEN: #${n} is ${why} since this sprint began it. It is not this sprint's any more: do not build, commit or finish it. Work on it not yet committed goes to wip/issue-${n} (git switch -c, commit, switch back); a commit of it already on this branch and not pushed comes off (git branch wip/issue-${n}, then git reset --hard HEAD~1). It is now skipped; carry on with \`sprint.mjs next\`.`);
+}
+
 // Issues whose board card is In Review: built and pushed, waiting for a merge
 // (an earlier sprint's, or anyone's). Not work to pick up again.
 function inReview() {
@@ -549,6 +570,7 @@ if (action === 'budget') {
   const u = await usage(30);
   const j = judge(u, s);
   if (s) { record(s, u, 'budget'); writeState(s); }
+  dropIfLost(s);
   console.log(j.line);
   if (j.verdict !== 'GO' && j.verdict !== 'SMALL' && j.resumeInSeconds !== null) console.log(`the ${j.binding} limit resets in ${Math.round(j.resumeInSeconds / 60)} min (resumeInSeconds=${j.resumeInSeconds})`);
   // A keep-going wake that only reads the budget still sees the Inbox (PTrainr, 2026-11-16).
@@ -780,6 +802,7 @@ if (action === 'next') {
     console.log(`WIND DOWN: asked ${new Date(s.windDown.at).toLocaleTimeString()}. Start no new issue${s.current ? `; finish #${s.current.n}, then checkpoint` : '; checkpoint now'}.`);
     process.exit(0);
   }
+  dropIfLost(s);
   const u = await usage(30);
   const j = judge(u, s);
   const mine = Boolean(s?.mine || flag('mine'));
@@ -877,6 +900,17 @@ if (action === 'begin' || action === 'finish' || action === 'skip') {
     const subject = dirty ? '' : sh('git', [...at, 'log', '-1', '--no-merges', '--format=%s']); // a merge of main may sit on top
     const refused = finishRefusal({ n, dirty, subject, note: opt('note') });
     if (refused) { console.log(refused.why); process.exit(refused.code); }
+    // Still this sprint's? Someone may have taken, built and merged it while the sprint was
+    // paused; finishing would push a duplicate and reopen the closed issue (work.mjs review).
+    let lost = null;
+    try { lost = lostSince(n, s); } catch { /* gh unreadable: finish as before */ }
+    if (lost) {
+      s.skipped.push({ n, why: `${lost} before finish` });
+      if (s.current?.n === n) s.current = null;
+      writeState(s);
+      console.log(`#${n} is ${lost} since this sprint began it: not finishing it (nothing pushed, the issue untouched). Its commit comes off this branch: git branch wip/issue-${n}, then git reset --hard HEAD~1. Then \`sprint.mjs next\`.`);
+      process.exit(4);
+    }
   }
   if (action === 'begin' && s.windDown) {
     console.log(`winding down since ${new Date(s.windDown.at).toLocaleTimeString()}: no new issue. Checkpoint instead.`);

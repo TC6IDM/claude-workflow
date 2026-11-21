@@ -111,6 +111,11 @@ node .claude/skills/{{PREFIX}}-sprint/sprint.mjs start [--issues 12,34,56 [--onl
    and `sprint.mjs finish N --note "<what changed, where>"` (add `--needs-live`
    when only a live job site can show the rest). `finish`:
    - refuses if anything is uncommitted or the last commit doesn't name `#N`;
+   - refuses (exit 4) if the issue was closed or assigned to someone else since
+     `begin`: someone took it over while the sprint was paused. Move the commit
+     to `wip/issue-N` as it says and carry on with `next`. `next` and `budget`
+     ask the same about the issue in progress on every resume and print
+     `TAKEN:` when it is gone: leave it alone, never build it a second time;
    - pushes the branch;
    - opens the sprint's PR on the first finished issue, or updates it;
    - rewrites the PR body: Fixes lines, in progress, passed over, and the

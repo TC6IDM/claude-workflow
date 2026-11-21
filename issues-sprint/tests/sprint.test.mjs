@@ -85,6 +85,17 @@ test('finish refuses a dirty tree, a commit that does not name #N, and no note',
   assert.equal(finishRefusal({ n: 48, dirty: '', subject: 'Tests for the guard (#48)', note: 'x' }), null);
 });
 
+import { takenAway } from '../skills/__P__-sprint/verdict.mjs';
+
+test('an issue taken or closed while the sprint was paused is no longer its own', () => {
+  assert.equal(takenAway({ state: 'OPEN', assignees: ['me'], me: 'me' }), null);
+  assert.equal(takenAway({ state: 'OPEN', assignees: [], me: 'me' }), null, 'unassigned: still free to finish');
+  assert.equal(takenAway({ state: 'OPEN', assignees: ['me', 'other'], me: 'me' }), null);
+  assert.equal(takenAway({ state: 'OPEN', assignees: ['other'], me: 'me', also: ['other'] }), null, 'take-from');
+  assert.equal(takenAway({ state: 'OPEN', assignees: ['other'], me: 'me' }), 'assigned to other');
+  assert.equal(takenAway({ state: 'CLOSED', assignees: ['me'], me: 'me' }), 'closed', 'someone else built and merged it');
+});
+
 // ---------- usage per issue (#49) ----------
 import { issueUsage, usageNote, sizeAverages, expectedCost, misSized, MEASURED_AFTER, DEFAULT_ISSUE_COST } from '../skills/__P__-sprint/verdict.mjs';
 
