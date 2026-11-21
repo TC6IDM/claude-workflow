@@ -163,7 +163,7 @@ test('usage: the start, every checkpoint, then the latest reading unless it is t
   const mid = r('2026-11-20T12:00:00Z', 30, 'finish');
   const two = r('2026-11-20T14:00:00Z', 96, 'checkpoint');
   const late = r('2026-11-20T15:00:00Z', 12, 'finish');
-  const labels = lines => lines.slice(1).map(l => l.match(/^- ([^(]+?) (/)?.[1] ?? l);
+  const labels = lines => lines.slice(1).map(l => l.match(/^- ([^(]+?) \(/)?.[1] ?? l);
 
   assert.deepEqual(usageLines([]), []);
   assert.deepEqual(labels(usageLines([start], 0, 'UTC')), ['At the start']);
@@ -171,7 +171,7 @@ test('usage: the start, every checkpoint, then the latest reading unless it is t
   assert.deepEqual(labels(usageLines([start, one, mid, two], 0, 'UTC')), ['At the start', 'Checkpoint 1', 'Checkpoint 2'], 'no repeat of the last checkpoint');
   const lines = usageLines([start, one, late], 2, 'UTC');
   assert.equal(lines[0], '## Usage');
-  assert.match(lines[2], /^- Checkpoint 1 (.+): 5-hour 95%, weekly 10%$/);
+  assert.match(lines[2], /^- Checkpoint 1 \(.+\): 5-hour 95%, weekly 10%$/);
   assert.equal(lines.at(-1), '- The 5-hour window reset 2× during the sprint');
 });
 

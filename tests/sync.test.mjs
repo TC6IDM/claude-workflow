@@ -59,9 +59,13 @@ test('the repo\'s own files survive a sync, and --check notices an edited shared
 test('the shared tests pass in a repo that only has the template config', () => {
   const repo = freshRepo();
   try {
+    // A child of node --test reports to the parent, not its own stdout, unless the context is cleared.
+    const ownRun = { ...process.env }; delete ownRun.NODE_TEST_CONTEXT;
     sync(repo, '--prefix', 'demo', '--init'); sync(repo);
-    const r = spawnSync(process.execPath, ['--test', join(repo, '.claude/tests')], { encoding: 'utf8', cwd: repo });
+    const r = spawnSync(process.execPath, ['--test', '.claude/tests/*.test.mjs'], { encoding: 'utf8', cwd: repo, env: ownRun });
     assert.equal(r.status, 0, r.stdout.slice(-1500));
+    assert.match(r.stdout, /ℹ pass [1-9]/, 'the shared tests ran');
+    assert.match(r.stdout, /ℹ fail 0/);
   } finally { rmSync(repo, { recursive: true, force: true }); }
 });
 
