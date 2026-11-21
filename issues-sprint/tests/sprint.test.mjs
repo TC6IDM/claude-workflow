@@ -139,7 +139,7 @@ test('mis-sized issues sit nearer another size average', () => {
 });
 
 // ---------- the checkpoint's decisions and the reset times ----------
-import { resetLabel, readingLine, decisionsComment, answersSince, DECISIONS_MARK } from '../skills/__P__-sprint/verdict.mjs';
+import { resetLabel, readingLine, usageLines, decisionsComment, answersSince, DECISIONS_MARK } from '../skills/__P__-sprint/verdict.mjs';
 
 test('reset times: the time alone on the same day, the weekday on another', () => {
   const now = new Date('2026-11-20T15:00:00Z');
@@ -154,6 +154,25 @@ test('a reading says when each window resets, and leaves it out when unknown', (
   assert.equal(readingLine({ session: 77, sessionResets: '2026-11-20T20:00:00Z', weekly: 39, weeklyResets: '2026-11-22T09:00:00Z' }, now, 'UTC'),
     '5-hour 77% (resets 8:00 PM), weekly 39% (resets Sun 9:00 AM)');
   assert.equal(readingLine({ session: 5, weekly: null }, now, 'UTC'), '5-hour 5%, weekly ?%');
+});
+
+test('usage: the start, every checkpoint, then the latest reading unless it is the last checkpoint', () => {
+  const r = (at, session, step) => ({ at, session, weekly: 10, step });
+  const start = r('2026-11-20T06:00:00Z', 5, 'start');
+  const one = r('2026-11-20T09:00:00Z', 95, 'checkpoint');
+  const mid = r('2026-11-20T12:00:00Z', 30, 'finish');
+  const two = r('2026-11-20T14:00:00Z', 96, 'checkpoint');
+  const late = r('2026-11-20T15:00:00Z', 12, 'finish');
+  const labels = lines => lines.slice(1).map(l => l.match(/^- ([^(]+?) (/)?.[1] ?? l);
+
+  assert.deepEqual(usageLines([]), []);
+  assert.deepEqual(labels(usageLines([start], 0, 'UTC')), ['At the start']);
+  assert.deepEqual(labels(usageLines([start, one, mid, two, late], 0, 'UTC')), ['At the start', 'Checkpoint 1', 'Checkpoint 2', 'Latest reading']);
+  assert.deepEqual(labels(usageLines([start, one, mid, two], 0, 'UTC')), ['At the start', 'Checkpoint 1', 'Checkpoint 2'], 'no repeat of the last checkpoint');
+  const lines = usageLines([start, one, late], 2, 'UTC');
+  assert.equal(lines[0], '## Usage');
+  assert.match(lines[2], /^- Checkpoint 1 (.+): 5-hour 95%, weekly 10%$/);
+  assert.equal(lines.at(-1), '- The 5-hour window reset 2× during the sprint');
 });
 
 test('the decisions comment: options lettered, the recommended one marked, the link, nothing when none are open', () => {

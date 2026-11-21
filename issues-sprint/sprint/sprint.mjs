@@ -68,7 +68,7 @@ import { join, resolve } from 'node:path';
 import https from 'node:https';
 
 import { REPO, REPO_NAME, OWNER, PROJECT, MILESTONE_ORDER as MILESTONES, LINKED_REPOS, linkedRepoOf, NAME, PREFIX, NEEDS_LIVE_TEXT } from './repo.mjs';
-import { STALE_HOURS, KEEP_GOING_STALE_HOURS, DEFAULT_SMALL_AT, DEFAULT_NEW_AT, DEFAULT_STOP_AT, FABLE_LINES, LARGE_SESSION_AT, LARGE_WEEKLY_UNDER, DEFAULT_ISSUE_COST, defaultLines, until, judge, isLarge, largeAllowed, averageCost, finishRefusal, takenAway, USAGE_FIELD, MEASURED_AFTER, issueUsage, usageNote, sizeAverages, expectedCost, misSized, readingLine, decisionsComment, answersSince } from './verdict.mjs';
+import { STALE_HOURS, KEEP_GOING_STALE_HOURS, DEFAULT_SMALL_AT, DEFAULT_NEW_AT, DEFAULT_STOP_AT, FABLE_LINES, LARGE_SESSION_AT, LARGE_WEEKLY_UNDER, DEFAULT_ISSUE_COST, defaultLines, until, judge, isLarge, largeAllowed, averageCost, finishRefusal, takenAway, USAGE_FIELD, MEASURED_AFTER, issueUsage, usageNote, sizeAverages, expectedCost, misSized, readingLine, usageLines, decisionsComment, answersSince } from './verdict.mjs';
 const DIR = join(tmpdir(), `${PREFIX}-sprint`);
 const STATE = join(DIR, 'state.json');
 const CACHE = join(DIR, 'usage.json');
@@ -270,13 +270,9 @@ function prBody(s, pr, running) {
   }
   if (s.current) lines.push('', '## In progress', `- #${s.current.n}${s.current.repo ? ` (in ${s.current.repo})` : ''}${running ? `: being built now; it joins ${s.current.repo ? 'that repo\'s sprint PR' : 'this PR'} as its own commit when its checks pass` : ': not finished, kept off this PR (see its "Next" comment)'}`);
   if (s.skipped.length) lines.push('', '## Passed over', ...s.skipped.map(d => `- #${d.n}: ${d.why}`));
-  const first = s.readings[0], last = s.readings.at(-1);
-  if (first && last) {
-    // Each reading says when its windows reset, measured from that reading's own time.
-    lines.push('', '## Usage', `- At the start (${new Date(first.at).toLocaleString()}): ${readingLine(first, new Date(first.at))}`,
-      `- Last reading (${new Date(last.at).toLocaleString()}): ${readingLine(last, new Date(last.at))}`);
-    if (s.resets) lines.push(`- The 5-hour window reset ${s.resets}× during the sprint`);
-  }
+  // Each reading says when its windows reset, measured from that reading's own time.
+  const usage = usageLines(s.readings, s.resets);
+  if (usage.length) lines.push('', ...usage);
   lines.push('', running
     ? `_The sprint is still running: each issue arrives as its own commit and its card moves to In Review. The "${RUNNING}" label holds CI back until the checkpoint takes it off (CI then runs once; take it off by hand to run CI sooner). It can be merged at any time; a later issue then opens a new PR._`
     : '_The sprint has checkpointed: CI runs once on this state. Nothing more arrives unless it resumes after a usage reset._', '', ATTRIBUTION);

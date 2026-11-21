@@ -165,6 +165,22 @@ export function readingLine(r, now = new Date(), timeZone) {
   return `5-hour ${pct(r.session)}${when(r.sessionResets)}, weekly ${pct(r.weekly)}${when(r.weeklyResets)}`;
 }
 
+/**
+ * The PR's Usage section: the reading at the start, each checkpoint's, then the
+ * latest one (left out when it is that last checkpoint's). [] with no readings.
+ */
+export function usageLines(readings = [], resets = 0, timeZone) {
+  const first = readings[0], last = readings.at(-1);
+  if (!first || !last) return [];
+  const at = r => new Date(r.at).toLocaleString(undefined, timeZone ? { timeZone } : undefined);
+  const line = (label, r) => `- ${label} (${at(r)}): ${readingLine(r, new Date(r.at), timeZone)}`;
+  const checkpoints = readings.filter(r => r !== first && r.step === 'checkpoint');
+  const lines = ['## Usage', line('At the start', first), ...checkpoints.map((r, i) => line(`Checkpoint ${i + 1}`, r))];
+  if (last !== first && last !== checkpoints.at(-1)) lines.push(line('Latest reading', last));
+  if (resets) lines.push(`- The 5-hour window reset ${resets}× during the sprint`);
+  return lines;
+}
+
 /** The hidden mark on the checkpoint's questions comment, so a resumed sprint finds it. */
 export const DECISIONS_MARK = '<!-- sprint-decisions -->';
 
