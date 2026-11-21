@@ -84,6 +84,18 @@ const flag = name => args.includes(`--${name}`);
 const sh = (cmd, list, quiet) => execFileSync(cmd, list, { encoding: 'utf8', stdio: ['ignore', 'pipe', quiet ? 'ignore' : 'pipe'] }).trim();
 
 // ---------- state ----------
+// The Inbox at every step between issues (the owner, 2026-11-21): a sprint's
+// start, each begin, finish and checkpoint, and every budget and next, so a
+// comment never waits there for a whole sprint. `then` says what to do about it.
+function inboxLine(then) {
+  try {
+    const inbox = sh('node', [new URL(`../${PREFIX}-issues/inbox.mjs`, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'), 'count'], true);
+    return inbox ? `INBOX: ${inbox} ${then}` : 'Inbox: nothing waiting.';
+  } catch {
+    return 'Inbox: could not be read (offline or signed out); run inbox.mjs pending by hand.';
+  }
+}
+
 function readState() {
   try {
     const s = JSON.parse(readFileSync(STATE, 'utf8'));
@@ -574,10 +586,7 @@ if (action === 'budget') {
   console.log(j.line);
   if (j.verdict !== 'GO' && j.verdict !== 'SMALL' && j.resumeInSeconds !== null) console.log(`the ${j.binding} limit resets in ${Math.round(j.resumeInSeconds / 60)} min (resumeInSeconds=${j.resumeInSeconds})`);
   // A keep-going wake that only reads the budget still sees the Inbox (PTrainr, 2026-11-16).
-  try {
-    const inbox = sh('node', [new URL(`../${PREFIX}-issues/inbox.mjs`, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'), 'count'], true);
-    console.log(inbox ? `${inbox} Do the Inbox pass before taking an issue (unless STOP).` : 'Inbox: nothing waiting.');
-  } catch { console.log('Inbox: could not be read.'); }
+  console.log(inboxLine('Do the Inbox pass before taking an issue (unless STOP).'));
   process.exit(0);
 }
 
@@ -783,6 +792,7 @@ if (action === 'start') {
     }
   }
   console.log(`sprint on: ${external ? `work lands in ${external} (this repo stays on ${branch}, no commits here)` : `branch ${branch} from origin/main`}${queue.length ? `, first ${queue.map(n => `#${n}`).join(' ')}${state.only ? ' and nothing else' : ''}` : ''}${state.mine ? ', only issues assigned to you' : ''}${state.label ? `, only issues labelled ${state.label}` : ''}${state.keepGoing ? ', keep going after resets' : ''}`);
+  console.log(inboxLine('Do the Inbox pass before the first issue.'));
   process.exit(0);
 }
 
@@ -821,12 +831,7 @@ if (action === 'next') {
   console.log(j.line);
   // Every pass of the loop starts with the Inbox (the owner, 2026-11-17): a
   // comment waiting there becomes issues before anything is chosen.
-  try {
-    const inbox = sh('node', [new URL(`../${PREFIX}-issues/inbox.mjs`, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'), 'count'], true);
-    console.log(inbox ? `${inbox} Log them first (inbox.mjs pending), then run next again.` : 'Inbox: nothing waiting.');
-  } catch {
-    console.log('Inbox: could not be read (offline or signed out); run inbox.mjs pending by hand.');
-  }
+  console.log(inboxLine('Log them first (inbox.mjs pending), then run next again.'));
   // Answers to the last checkpoint's questions: the comments under
   // that post on the sprint's PR are the maintainer's decisions. Act on each
   // (unskip and build, or record it on its issue) and say so in the next finish note.
@@ -993,6 +998,9 @@ if (action === 'begin' || action === 'finish' || action === 'skip') {
   }
   writeState(s);
   console.log(judge(u, s).line);
+  console.log(inboxLine(action === 'begin'
+    ? 'Log them now, before building this issue (an Inbox pass is between issues, never inside one).'
+    : 'Do the Inbox pass before the next issue.'));
   process.exit(0);
 }
 
@@ -1092,6 +1100,7 @@ if (action === 'checkpoint') {
   }
   const jc = judge(u, s);
   console.log(jc.line);
+  console.log(inboxLine('Do the Inbox pass now, before the pause.'));
   // A wait longer than the prompt cache's hour: the first message after it
   // re-writes the whole context at full price, so a smaller context then costs
   // far less. Only the person can run /compact (maintainer, 2026-11-13).

@@ -60,10 +60,13 @@ node .claude/skills/{{PREFIX}}-sprint/sprint.mjs start [--issues 12,34,56 [--onl
 
 ## 2. The loop: one issue at a time
 
-0. **The Inbox first, on every loop.** `sprint.mjs budget` and `next` print an
-   `Inbox:` line. When something is waiting, do the Inbox pass (`{{PREFIX}}-issues`
-   SKILL.md, "The Inbox issue") before taking an issue. Never during an issue's
-   build, only between issues; at `STOP`, leave it for the first wake under the line.
+0. **The Inbox first, at every step.** `sprint.mjs start`, `budget`, `next`,
+   `begin`, `finish`, `skip` and `checkpoint` each print an `Inbox:` line
+   (`INBOX:` when something is waiting). Then do the Inbox pass (`{{PREFIX}}-issues`
+   SKILL.md, "The Inbox issue") at once: before the first issue, before building
+   one, after finishing one, and before a checkpoint's pause, so nothing waits
+   there for a whole sprint. Never during an issue's build, only between issues;
+   at `STOP`, leave it for the first wake under the line.
    **Answers next.** When `next` prints `ANSWERS on PR #P` (comments under the
    last checkpoint's questions, read on the first wake after a checkpoint and
    after `start --here`), each is the owner's decision: act on it before
