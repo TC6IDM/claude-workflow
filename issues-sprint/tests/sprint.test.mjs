@@ -264,3 +264,50 @@ test('stalls: labels say what ran, never what a file or message held', () => {
   assert.ok(toolLabel({ name: 'Bash', input: { command: 'x'.repeat(500) } }).length < 80);
   assert.deepEqual(findStalls([prompt(0, 'a'), reply(1)], { minMinutes: 5 }), []);
 });
+
+import { takeable, nothingLeft, HANDED_OFF } from '../skills/__P__-sprint/verdict.mjs';
+
+const issue = (labels, assignees = []) => ({ labels, assignees });
+const greedy = { me: 'bora', keepGoing: true, greedy: true };
+const tierOf = (i, status, o = greedy) => takeable(i, status ?? null, o).tier;
+
+test('keep going takes, in order: yours, unassigned, another developer\'s, Claude\'s part of shared ones, the owner\'s', () => {
+  assert.equal(tierOf(issue(['who:claude'], ['bora'])), 0);
+  assert.equal(tierOf(issue(['who:claude'])), 1);
+  assert.equal(tierOf(issue(['who:claude'], ['tc'])), 2);
+  assert.equal(tierOf(issue(['who:together'], ['tc'])), 3);
+  assert.equal(tierOf(issue(['who:claude', 'type:decision'])), 3, 'a decision: Claude builds the options, then hands off');
+  assert.equal(tierOf(issue([])), 3, 'no who label: treated as shared');
+  assert.equal(tierOf(issue(['who:you'], ['tc'])), 4);
+  assert.equal(tierOf(issue(['who:lawyer'])), 4);
+});
+
+test('never someone else\'s In Progress, anything waiting on a person, in review, a parent or the Inbox', () => {
+  const left = (i, status) => takeable(i, status, greedy);
+  assert.deepEqual(left(issue(['who:claude'], ['tc']), 'In Progress'), { tier: null, why: 'in progress under tc' });
+  assert.equal(left(issue(['who:claude']), 'In Progress').why, 'in progress', 'unassigned but someone moved it: leave it');
+  assert.equal(left(issue(['who:claude'], ['bora']), 'In Progress').tier, 0, 'your own In Progress is yours to carry on');
+  assert.equal(left(issue(['who:together', 'status:needs-decision']), null).why, 'waiting on a person (status:needs-decision)');
+  assert.equal(left(issue(['who:you', HANDED_OFF]), null).why, `waiting on a person (${HANDED_OFF})`, 'a handed-off issue is not done twice');
+  assert.equal(left(issue(['who:claude']), 'In Review').why, 'in review');
+  assert.equal(left(issue(['type:epic', 'who:claude']), null).tier, null);
+  assert.equal(left(issue(['inbox']), null).tier, null);
+});
+
+test('without keep going (or with --no-greedy) a sprint stays with yours and unassigned who:claude issues', () => {
+  for (const o of [{ me: 'bora' }, { me: 'bora', keepGoing: true, greedy: false }]) {
+    assert.equal(tierOf(issue(['who:claude']), null, o), 1);
+    assert.equal(takeable(issue(['who:claude'], ['tc']), null, o).why, 'assigned to tc');
+    assert.equal(takeable(issue(['who:together']), null, o).why, 'who:together');
+    assert.equal(tierOf(issue(['who:claude', 'type:decision']), null, o), 3, 'a who:claude decision: Claude prepares the options in any sprint, then hands off');
+    assert.equal(takeable(issue(['who:claude', 'type:decision'], ['tc']), null, o).why, 'a decision', "someone else's decision waits for keep going");
+  }
+  assert.equal(takeable(issue(['who:claude']), null, { me: 'bora', mine: true }).why, 'unassigned (--mine)');
+  assert.equal(tierOf(issue(['who:claude'], ['tc']), null, { me: 'bora', also: ['tc'] }), 0, 'take-from still makes theirs yours');
+});
+
+test('the done line counts why every open issue was left', () => {
+  assert.equal(nothingLeft(['in review', 'in review', 'waiting on a person (status:needs-decision)', 'in progress under tc', 'in progress under bora', 'assigned to tc']),
+    'NOTHING LEFT on the board that this sprint can work on: 2 in review · 2 in progress · 1 waiting on a person (status:needs-decision) · 1 assigned to someone else.');
+  assert.equal(nothingLeft([]), 'NOTHING LEFT on the board that this sprint can work on.');
+});

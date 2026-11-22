@@ -24,7 +24,9 @@ Invoking `/{{PREFIX}}-sprint` is the owner's yes, **for that sprint only**, to: 
 on the sprint's own `sprint/<date-time>` branch (one commit per issue) and on
 `wip/issue-<N>` branches, push those branches, open the sprint's PR into `main`
 at its first finished issue and keep it up to date, comment on and tick the
-worked issues, and move each finished one to **In Review** (`sprint.mjs finish`).
+worked issues, claim each one it begins (assigned, card In Progress), move each
+finished one to **In Review** (`sprint.mjs finish`), and hand back the ones whose
+rest needs a person (`sprint.mjs handoff`).
 `.claude/hooks/guard.mjs` allows exactly that while the sprint's state file is
 live and the checkout is its branch. **Never:** commit on or push to `main`,
 merge, close an issue, force-push, submit a real application or form for the
@@ -44,8 +46,9 @@ node .claude/skills/{{PREFIX}}-sprint/sprint.mjs start [--issues 12,34,56 [--onl
 - **`--label <name>`** ("only the area:workday ones"): only issues that also
   carry that label. Named issues still go first.
 - **`--avoid 19,39`**: those issues and everything under them are left out.
-  Anything assigned to someone else, or under a parent assigned to someone else,
-  is never a candidate. `--mine`: issues assigned to the person first; alone it
+  Without `--keep-going`, anything assigned to someone else, or under a parent
+  assigned to someone else, is never a candidate; with it, see "Keep going takes
+  everything it can" below. `--mine`: issues assigned to the person first; alone it
   claims nothing unassigned; with `--keep-going` it moves on to unassigned ones
   after. **Only when the person says so** ("and Andrew's too"), `sprint.mjs take-from <login>`
   lets the sprint take that developer's issues as if they were the person's own
@@ -74,16 +77,45 @@ node .claude/skills/{{PREFIX}}-sprint/sprint.mjs start [--issues 12,34,56 [--onl
    next `finish` note.
 1. `sprint.mjs next`: the budget line, the room left, the average cost of an
    issue so far, and the candidates (named first, then: open, `who:claude`, not
-   an epic or decision, no `status:` label, yours or unassigned; by milestone,
-   priority, then size). `SMALL` lists only `size:S`. `WRAP`/`STOP`, or nothing
-   left → **Checkpoint**.
+   an epic (a `who:claude` decision is taken in any sprint: build its options and
+   mock-ups, `ask` the question, then `handoff`), no `status:` label, yours or unassigned; by milestone,
+   priority, then size; a keep-going sprint goes further, below). `SMALL` lists
+   only `size:S`. `WRAP`/`STOP`, or `NOTHING LEFT` → **Checkpoint**.
+
+   **Keep going takes everything it can** (the owner, 2026-11-22). A keep-going
+   sprint is done only when nothing on the board can be worked on: everything
+   Claude can build is built, and what is left waits on a decision or on a
+   real-world step only a person can take (a business number, a government
+   registration, a store account). So after its own and the unassigned
+   `who:claude` issues, `next` offers, in this order:
+   - **other developers' `who:claude` issues** (`begin` adds the sprint's
+     assignee and tells the owner in a comment);
+   - **Claude's part of a shared issue or a decision** (`who:together`,
+     `type:decision`, no `who:` label): the mock-ups as an artifact linked on the
+     issue, with the question `ask`ed, the code that doesn't wait on the
+     decision, drafts, research;
+   - **the preparation for the owner's own issues** (`who:you`, `who:lawyer`):
+     a checklist with the exact steps and links, filled-in drafts, the research.
+
+   It never takes an issue whose card is **In Progress** under someone else
+   (they are on it now), one with a `status:` label (waiting on a person), one
+   in review, a parent, or anything on the avoid list. `start --no-greedy` keeps
+   a keep-going sprint to its own and unassigned `who:claude` issues.
+   For the last two kinds, build the part, commit it as `<title> (#N)` if
+   there is code, then `sprint.mjs handoff N --why "<what is built; what is
+   left, for whom>"`: it pushes the commit (listed on the PR without `Fixes`,
+   so the issue stays open), comments, labels it `status:claude-part-done` so no
+   sprint does it twice, and moves the card back to Todo. Nothing Claude can
+   prepare: hand off at once, naming the real-world step. `NOTHING LEFT`
+   counts why each open issue was left, so the checkpoint can say what waits on whom.
 2. **Choose** the first one that fits. Skip it (`sprint.mjs skip N --why "…"`)
    when it needs:
    - a **live application** on a real job site (`status:needs-site`, or a fix
      that can only be judged on the live page and has no saved markup yet).
      A fix that has a fixture copied from the real markup is fine;
    - the owner's accounts, money, a decision the issue doesn't settle, or a
-     message to a real person;
+     message to a real person (in a keep-going sprint: do the part that needs
+     none of these, then `handoff`, instead of skipping);
    - the owner's real profile, documents or answers (tests use fixtures and the
      sample profile, never `exportAll` output);
    - a running Laya server, when the change can't be tested with the
@@ -220,7 +252,7 @@ wind-down or closing the session ends it.
   `SMALL`. Each wake is one `budget` call (plus the Inbox pass when its line says
   so and the verdict isn't `STOP`). **3300 s, not 3600:** the prompt cache lives
   an hour, so a wake at 55 minutes reads the context at a tenth of the price.
-- **Nothing left to take:** `ScheduleWakeup` 1800 s, `noop: true`; each wake is
+- **Nothing left to take** (`NOTHING LEFT`, after every kind of issue above has been tried): `ScheduleWakeup` 1800 s, `noop: true`; each wake is
   one `next` (and the Inbox pass). Half an hour, not 55 minutes: the owner adds
   work through the Inbox while a sprint runs, and an hour's wait for each
   comment was the slowest part of a sprint (claude-workflow#2). The cache still

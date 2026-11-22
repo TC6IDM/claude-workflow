@@ -338,3 +338,62 @@ export function stallSummary(stalls, sessionMinutes = null) {
   if (top.length) lines.push('longest:', ...top.map(g => `  ${g.minutes} min at ${clock(g.at)}: ${g.what}`));
   return lines;
 }
+
+// ---------- what a sprint may take (claude-workflow#3) ----------
+// The owner, 2026-11-22: a keep-going sprint keeps going, and is done only when
+// nothing on the board can be worked on: everything Claude can build is built,
+// and what is left waits on a decision or a real-world step only a person can
+// take. So past its own and the unassigned issues it takes other developers'
+// who:claude issues, then Claude's part of the shared ones (mock-ups, drafts,
+// research, code that doesn't wait on the decision), then the preparation for
+// the owner's own (a checklist, a filled-in draft). It hands those back with
+// `handoff`, which puts HANDED_OFF on them so no later sprint does them again.
+// Never an issue someone else has In Progress: they are on it now.
+export const HANDED_OFF = 'status:claude-part-done';
+export const TIERS = [
+  'yours',
+  'unassigned',
+  "another developer's (keep going: nothing of yours or unassigned was left)",
+  "Claude's part of a shared issue or a decision: build what needs no person, then handoff",
+  "the owner's: prepare what Claude can (a checklist, a draft, the research), then handoff",
+];
+
+/**
+ * { tier } when this sprint may take the issue (lower tiers first), or
+ * { tier: null, why }. issue: { labels: [names], assignees: [logins] };
+ * status: its board column. greedy: a keep-going sprint not started --no-greedy.
+ */
+export function takeable({ labels = [], assignees = [] }, status, { me, also = [], mine = false, keepGoing = false, greedy = false } = {}) {
+  const has = l => labels.includes(l);
+  if (has('type:epic') || has('inbox')) return { tier: null, why: 'a parent or the Inbox' };
+  const waiting = labels.find(l => l.startsWith('status:'));
+  if (waiting) return { tier: null, why: `waiting on a person (${waiting})` };
+  if (status === 'In Review') return { tier: null, why: 'in review' };
+  if (status === 'Done') return { tier: null, why: 'done' };
+  const ours = new Set([me, ...also]);
+  const own = assignees.some(a => ours.has(a));
+  const others = assignees.length > 0 && !own;
+  if (status === 'In Progress' && !own) return { tier: null, why: `in progress${assignees.length ? ` under ${assignees.join(', ')}` : ''}` };
+  const wide = Boolean(keepGoing && greedy);
+  const who = labels.find(l => l.startsWith('who:'))?.slice(4) || null;
+  const decision = has('type:decision');
+  // A who:claude decision is Claude's to prepare in any sprint: the options, the mock-ups and the
+  // question; the person's pick is the only part that waits, so it is handed back, never skipped.
+  if (who === 'claude' && decision && (own || !others)) return !mine || keepGoing || own ? { tier: 3 } : { tier: null, why: 'unassigned (--mine)' };
+  if (who === 'claude' && !decision) {
+    if (own) return { tier: 0 };
+    if (!others) return !mine || keepGoing ? { tier: 1 } : { tier: null, why: 'unassigned (--mine)' };
+    return wide ? { tier: 2 } : { tier: null, why: `assigned to ${assignees.join(', ')}` };
+  }
+  if (!wide) return { tier: null, why: decision ? 'a decision' : `who:${who || 'nobody'}` };
+  if (who === 'you' || who === 'lawyer') return { tier: 4 };
+  return { tier: 3 };
+}
+
+/** "NOTHING LEFT: …" with why each open issue was left, counted: the sprint's done line. */
+export function nothingLeft(reasons) {
+  const counts = {};
+  for (const why of reasons) { const k = why.replace(/ under .*/, '').replace(/^assigned to .*/, 'assigned to someone else'); counts[k] = (counts[k] || 0) + 1; }
+  const parts = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`);
+  return `NOTHING LEFT on the board that this sprint can work on${parts.length ? `: ${parts.join(' · ')}` : ''}.`;
+}

@@ -11,6 +11,10 @@
 //     For work with no PR to wait for (accounts, decisions, research), or to close by hand:
 //     comments the note, closes the issue as completed, moves the card to Done,
 //     and closes the parent too when this was its last open sub-issue.
+//   node .claude/skills/<prefix>-issues/work.mjs handoff 65 --note "What Claude built; what is left, for whom"
+//     Claude's part of a shared or owner's issue is done and the rest needs a person (a decision,
+//     a real-world step): comments the note, labels it status:claude-part-done so no sprint takes
+//     it again until that label comes off, keeps it open and moves the card back to Todo.
 //   node .claude/skills/<prefix>-issues/work.mjs tidy
 //     Moves the card of every closed issue that is not on Done to Done, and closes every
 //     open parent whose sub-issues are all closed (a merge closes sub-issues, never their
@@ -174,6 +178,14 @@ if (action === 'start') {
   setStatus('In Progress');
   run('comment', ['issue', 'comment', String(number), '--repo', REPO, '--body', `Started by @${who} (with Claude).`]);
   assignDown(number); // a parent's sub-issues are theirs too
+} else if (action === 'handoff') {
+  const note = opt('note');
+  if (!note) { console.error('handoff needs --note "what Claude built; what is left, for whom"'); process.exit(1); }
+  const HANDED = 'status:claude-part-done';
+  run(`label ${HANDED}`, ['label', 'create', HANDED, '--repo', REPO, '--color', 'bfdadc', '--description', "Claude's part is done; the rest waits on a person", '--force']);
+  run(`add ${HANDED}`, ['issue', 'edit', String(number), '--repo', REPO, '--add-label', HANDED]);
+  run('comment', ['issue', 'comment', String(number), '--repo', REPO, '--body', `**Claude's part is done; the rest is for a person.** ${note}\n\nTake the \`${HANDED}\` label off when there is more for a sprint to do here.`]);
+  setStatus('Todo');
 } else if (action === 'review') {
   const note = opt('note');
   if (!note) { console.error('review needs --note "what changed, where, and the PR"'); process.exit(1); }
