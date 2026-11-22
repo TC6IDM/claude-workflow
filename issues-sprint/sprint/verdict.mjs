@@ -217,3 +217,124 @@ export function answersSince(comments, seen = null) {
   if (last < 0) return [];
   return list.slice(last + 1).filter(c => !String(c.body || '').includes(DECISIONS_MARK) && (!seen || c.at > seen));
 }
+
+// ---------- the PR's "Now working on" line (claude-workflow#1) ----------
+const clock = iso => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+const span = ms => { const m = Math.max(0, Math.round(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`; };
+
+/**
+ * The line at the top of a running sprint's PR: the issue being built and since
+ * when, or "between issues". Null once the sprint has checkpointed (the PR is
+ * then a paused or finished state, and its In progress section says the rest).
+ */
+export function nowLine(s, running, now = Date.now()) {
+  if (!running || !s) return null;
+  const c = s.current;
+  if (c) return `**Now working on:** #${c.n}${c.title ? ` ${c.title}` : ''}${c.repo ? ` (in ${c.repo})` : ''} · since ${clock(c.at)} (${span(now - Date.parse(c.at))} at the last update)`;
+  const last = s.done?.at(-1)?.at;
+  return `**Now:** between issues${last ? ` (last one finished ${clock(last)})` : ''}`;
+}
+
+// ---------- finish, run again after it died half way ----------
+/**
+ * The done list with `entry` in it once. A `finish` that hung or died after it
+ * wrote the state (on a stalled gh call, say) and is run again replaces its own
+ * line instead of adding a second one, and keeps the cost the first run measured
+ * (the rerun no longer knows when the issue began) and what it had already done.
+ */
+export function withDone(done, entry) {
+  const list = done || [];
+  const i = list.findIndex(d => d.n === entry.n && (d.repo || null) === (entry.repo || null));
+  if (i < 0) return [...list, entry];
+  const before = list[i];
+  const merged = { ...before, ...entry };
+  for (const k of ['cost', 'weeklyCost', 'title', 'pr', 'reviewed']) if (entry[k] == null && before[k] != null) merged[k] = before[k];
+  return list.map((d, k) => (k === i ? merged : d));
+}
+
+// ---------- stalls: where a session's wall-clock time went ----------
+// Reads Claude Code's own transcript lines (the JSONL under ~/.claude/projects)
+// and finds every gap of `minMinutes` or more between one step and the next,
+// with what it was waiting on. It reports tool names, the first words of a
+// command and times: never a file's contents, a message or a tool's output.
+const head = (text, n = 70) => String(text || '').replace(/\s+/g, ' ').trim().slice(0, n);
+const blocks = e => (Array.isArray(e.message?.content) ? e.message.content : []);
+const textOf = e => (typeof e.message?.content === 'string' ? e.message.content : blocks(e).filter(b => b.type === 'text').map(b => b.text).join(' '));
+
+/** One tool call as a short label: `Bash: node sprint.mjs finish 723 --note "…` */
+export function toolLabel(b) {
+  const i = b.input || {};
+  const bg = i.run_in_background ? ' (in the background)' : '';
+  if (b.name === 'Bash' || b.name === 'PowerShell') return `${b.name}: ${head(i.command)}${bg}`;
+  if (b.name === 'ScheduleWakeup') return `ScheduleWakeup ${i.stop ? 'stop' : `${i.delaySeconds} s`}`;
+  if (b.name === 'Agent' || b.name === 'Task') return `${b.name}: ${head(i.description, 50)}${bg}`;
+  if (b.name === 'Monitor') return `Monitor${i.timeout ? ` (${i.timeout} ms)` : ''}`;
+  if (i.file_path) return `${b.name}: ${String(i.file_path).split(/[\/]/).pop()}`;
+  return b.name;
+}
+
+/** What one transcript line is, for the gap finder. */
+export function stepKind(e) {
+  if (e.type === 'assistant') {
+    const tools = blocks(e).filter(b => b.type === 'tool_use');
+    return tools.length ? { kind: 'tool', tools } : { kind: 'reply' };
+  }
+  if (e.type !== 'user') return { kind: 'other' };
+  if (blocks(e).some(b => b.type === 'tool_result')) return { kind: 'result' };
+  const text = textOf(e);
+  if (/<task-notification>/.test(text)) return { kind: 'prompt', from: 'a background task finishing' };
+  if (/<command-name>|<<autonomous-loop/.test(text)) return { kind: 'prompt', from: 'the loop prompt (a ScheduleWakeup firing, or a typed /command)' };
+  if (e.isMeta) return { kind: 'prompt', from: 'Claude Code itself' };
+  return { kind: 'prompt', from: 'a message from the person' };
+}
+
+/**
+ * [{ at, minutes, cause, what }] for each gap of at least `minMinutes`.
+ * cause: 'tool' (a tool call took that long), 'model' (Claude's reply did:
+ * a slow or retried stream), 'idle' (the turn had ended: nothing ran until a
+ * wake, a notification or the person), 'other'.
+ */
+export function findStalls(entries, { minMinutes = 5 } = {}) {
+  const steps = (entries || []).filter(e => e && e.timestamp && !e.isSidechain && (e.type === 'user' || e.type === 'assistant'))
+    .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+  const out = [];
+  let turn = [];   // the tool calls since the last prompt, to say what an idle turn left running
+  for (let i = 0; i < steps.length; i++) {
+    const k = stepKind(steps[i]);
+    const gap = i > 0 ? describeGap(steps[i - 1], steps[i], k, turn, minMinutes) : null;
+    if (gap) out.push(gap);
+    // After the gap: a wake prompt closes the turn it is about.
+    if (k.kind === 'prompt') turn = [];
+    if (k.kind === 'tool') turn.push(...k.tools);
+  }
+  return out;
+}
+
+function describeGap(prev, step, k, turn, minMinutes) {
+  const minutes = (Date.parse(step.timestamp) - Date.parse(prev.timestamp)) / 60000;
+  if (minutes < minMinutes) return null;
+  const p = stepKind(prev);
+  let cause = 'other', what;
+  if (p.kind === 'tool' && k.kind === 'result') { cause = 'tool'; what = p.tools.map(toolLabel).join(' + '); }
+  else if ((p.kind === 'result' || p.kind === 'prompt') && (k.kind === 'tool' || k.kind === 'reply')) { cause = 'model'; what = "Claude's reply (a slow or retried response, or long thinking)"; }
+  else if ((p.kind === 'reply' || p.kind === 'tool') && k.kind === 'prompt') {
+    cause = 'idle';
+    const wake = [...turn].reverse().find(b => b.name === 'ScheduleWakeup');
+    const left = turn.filter(b => b.input?.run_in_background).map(toolLabel);
+    what = `the turn ended${wake ? ` with ${toolLabel(wake)}` : ' with no wake scheduled'}${left.length ? `, leaving ${left.join(' + ')}` : ''}; woken by ${k.from}`;
+  } else what = `${p.kind} → ${k.kind}`;
+  return { at: prev.timestamp, minutes: Math.round(minutes), cause, what };
+}
+
+/** Minutes per cause, and the five longest gaps, as printable lines. */
+export function stallSummary(stalls, sessionMinutes = null) {
+  const by = {};
+  for (const g of stalls) by[g.cause] = (by[g.cause] || 0) + g.minutes;
+  const names = { idle: 'idle, the turn had ended', tool: 'waiting on a tool', model: "waiting on Claude's reply", other: 'other' };
+  const lines = [];
+  if (sessionMinutes != null) lines.push(`session span: ${span(sessionMinutes * 60000)}`);
+  for (const [cause, m] of Object.entries(by).sort((a, b) => b[1] - a[1])) lines.push(`${names[cause] || cause}: ${span(m * 60000)}`);
+  const top = [...stalls].sort((a, b) => b.minutes - a.minutes).slice(0, 5);
+  if (top.length) lines.push('longest:', ...top.map(g => `  ${g.minutes} min at ${clock(g.at)}: ${g.what}`));
+  return lines;
+}

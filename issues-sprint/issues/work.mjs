@@ -21,7 +21,7 @@
 //     gets the assignees of the nearest assigned parent above it, at any depth (only under #65 if
 //     given). Never replaces an assignee. `start` on a parent and `tidy` run it too.
 //   Add --dry to print what would happen without changing anything.
-import { execFileSync } from 'node:child_process';
+import { gh as ghRun } from './gh.mjs';
 
 import { REPO, REPO_NAME, OWNER, PROJECT } from './config.mjs';
 const args = process.argv.slice(2);
@@ -29,7 +29,7 @@ const [action, numberArg] = args;
 const opt = name => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
 const dry = args.includes('--dry');
 const number = Number(numberArg);
-const gh = list => execFileSync('gh', list, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+const gh = list => ghRun(list);
 const ghJson = list => JSON.parse(gh(list));
 const run = (what, list) => { console.log(`${dry ? '[dry] ' : ''}${what}`); if (!dry) gh(list); };
 

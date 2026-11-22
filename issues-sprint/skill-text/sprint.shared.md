@@ -140,8 +140,38 @@ node .claude/skills/{{PREFIX}}-sprint/sprint.mjs start [--issues 12,34,56 [--onl
    `sprint.mjs skip N --why "…"`, carry on. **Can't land until another issue
    does:** comment which one it rides with, `skip N --why "lands with #M"`, and
    do it in #M's commit, naming both.
-7. Back to 1. Run `sprint.mjs budget` after each big step of a long issue too;
+7. Back to 1, **in the same turn**. Run `sprint.mjs budget` after each big step of a long issue too;
    obey the hook the moment it speaks.
+
+### Never idle while there is room
+
+A sprint's wall-clock time goes to waiting far more than to work: a finished
+issue followed by an ended turn sits until the next wake, 55 minutes later, and
+a small issue then takes an hour for 1% of the window (claude-workflow#2). So,
+while the verdict is `GO` or `SMALL`:
+- **Never end the turn between issues.** `finish` → Inbox pass → `next` →
+  `begin` → build, all in one turn. No `ScheduleWakeup`, no summary to the
+  person, no "carrying on next wake". A wake is only for section 4 (out of
+  budget, or nothing left to take).
+- **Run builds and tests in the foreground, under a limit** (the Bash tool's
+  `timeout`, up to 10 minutes, or `timeout 900 <command>`), never
+  `run_in_background` and then wait. A background run that hangs never sends
+  its notification, and the session sleeps until the fallback wake. If something
+  must run in the background, wait for it with `Monitor` (an until-loop with a
+  limit), and if a wake is unavoidable make it at most 600 s.
+- **A step that takes far longer than it should** (a script quiet for 5
+  minutes, a device or emulator command that doesn't return): stop it, try once
+  more, then move on and say so in the `finish` note. Every `gh` call in the
+  scripts gives up after 60 s and read-only ones are tried three times
+  (`GH_TIMEOUT_SECONDS` changes the limit), so a script that still hangs is
+  waiting on something else.
+- **Machine load is time too:** stop emulators, simulators and dev servers when
+  the issue that needed them is done.
+- **Slow and nobody knows why:** `sprint.mjs stalls` lists every gap of 5
+  minutes or more in this checkout's sessions over the last 12 hours, what it
+  waited on (a tool, Claude's reply, or an ended turn and what woke it), and the
+  `gh` calls over 5 s. Paste its output on the issue: it names tools, the first
+  words of commands and times, nothing else.
 
 ### Winding down (the person asks to stop)
 
@@ -190,8 +220,11 @@ wind-down or closing the session ends it.
   `SMALL`. Each wake is one `budget` call (plus the Inbox pass when its line says
   so and the verdict isn't `STOP`). **3300 s, not 3600:** the prompt cache lives
   an hour, so a wake at 55 minutes reads the context at a tenth of the price.
-- **Nothing left to take:** `ScheduleWakeup` 3300 s, `noop: true`; each wake is
-  one `next`.
+- **Nothing left to take:** `ScheduleWakeup` 1800 s, `noop: true`; each wake is
+  one `next` (and the Inbox pass). Half an hour, not 55 minutes: the owner adds
+  work through the Inbox while a sprint runs, and an hour's wait for each
+  comment was the slowest part of a sprint (claude-workflow#2). The cache still
+  holds at 30 minutes.
 - Not under `/loop`: it can't wait, so step 3.6, saying when it could resume.
 
 Wakes need the session open and the computer awake. Start an overnight run as
@@ -234,6 +267,14 @@ command so it can be allowed in `.claude/settings.json`.
 
 - `sprint.mjs`: the commands above; state in `<temp>/{{PREFIX}}-sprint/state.json`
   (ignored 14 hours after its last step, 8 days with keep-going; deleted by `end`).
+  `stalls` reads this checkout's Claude Code transcripts (never sends them anywhere).
+- `{{PREFIX}}-issues/gh.mjs`: every `gh` call the scripts make, with a 60 s limit,
+  three tries for reads, never two for a write, and calls over 5 s logged to
+  `<temp>/{{PREFIX}}-sprint/gh-slow.log`.
+- The PR body's first line, while the sprint runs, is the issue being built and
+  since when (or "between issues"); `begin` and `finish` rewrite it, a checkpoint drops it.
+- A `finish` that died half way (a stalled call) can simply be run again: it
+  replaces its own PR line and doesn't post its In Review note twice.
 - The usage token is this machine's own Claude login, sent only to
   `api.anthropic.com`, never printed or stored.
 - Test the whole flow with a fake low line: `start --new-at 12 --stop-at 15`.

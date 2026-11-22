@@ -62,13 +62,13 @@
 // Claude login. The token is read from ~/.claude/.credentials.json (or the macOS Keychain),
 // sent only to api.anthropic.com, and never printed or stored anywhere else.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir, tmpdir, platform } from 'node:os';
 import { join, resolve } from 'node:path';
 import https from 'node:https';
 
 import { REPO, REPO_NAME, OWNER, PROJECT, MILESTONE_ORDER as MILESTONES, LINKED_REPOS, linkedRepoOf, NAME, PREFIX, NEEDS_LIVE_TEXT } from './repo.mjs';
-import { STALE_HOURS, KEEP_GOING_STALE_HOURS, DEFAULT_SMALL_AT, DEFAULT_NEW_AT, DEFAULT_STOP_AT, FABLE_LINES, LARGE_SESSION_AT, LARGE_WEEKLY_UNDER, DEFAULT_ISSUE_COST, defaultLines, until, judge, isLarge, largeAllowed, averageCost, finishRefusal, takenAway, USAGE_FIELD, MEASURED_AFTER, issueUsage, usageNote, sizeAverages, expectedCost, misSized, readingLine, usageLines, decisionsComment, answersSince } from './verdict.mjs';
+import { STALE_HOURS, KEEP_GOING_STALE_HOURS, DEFAULT_SMALL_AT, DEFAULT_NEW_AT, DEFAULT_STOP_AT, FABLE_LINES, LARGE_SESSION_AT, LARGE_WEEKLY_UNDER, DEFAULT_ISSUE_COST, defaultLines, until, judge, isLarge, largeAllowed, averageCost, finishRefusal, takenAway, USAGE_FIELD, MEASURED_AFTER, issueUsage, usageNote, sizeAverages, expectedCost, misSized, readingLine, usageLines, decisionsComment, answersSince, nowLine, withDone, findStalls, stallSummary } from './verdict.mjs';
 const DIR = join(tmpdir(), `${PREFIX}-sprint`);
 const STATE = join(DIR, 'state.json');
 const CACHE = join(DIR, 'usage.json');
@@ -81,7 +81,14 @@ const args = process.argv.slice(2);
 const action = args[0];
 const opt = name => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
 const flag = name => args.includes(`--${name}`);
-const sh = (cmd, list, quiet) => execFileSync(cmd, list, { encoding: 'utf8', stdio: ['ignore', 'pipe', quiet ? 'ignore' : 'pipe'] }).trim();
+// gh goes through the issues folder's gh.mjs: a time limit on every call, and
+// read-only calls tried again after a stall (claude-workflow#2). Everything else
+// (pushes, work.mjs) gets a limit too, so no step of a sprint can hang for good.
+const { gh: ghRun } = await import(new URL(`../${PREFIX}-issues/gh.mjs`, import.meta.url));
+const SH_TIMEOUT_MS = 5 * 60000;
+const sh = (cmd, list, quiet) => cmd === 'gh'
+  ? ghRun(list, { quiet })
+  : execFileSync(cmd, list, { encoding: 'utf8', timeout: SH_TIMEOUT_MS, killSignal: 'SIGKILL', maxBuffer: 64 << 20, stdio: ['ignore', 'pipe', quiet ? 'ignore' : 'pipe'] }).trim();
 
 // ---------- state ----------
 // The Inbox at every step between issues (the owner, 2026-11-21): a sprint's
@@ -243,8 +250,12 @@ const percent = v => (v ?? '?') + '%';
 function prBody(s, pr, running) {
   // A linked repo's issues are on that repo's PR (#57), never Fixes lines here:
   // this PR's merge would close them with their code still unmerged there.
-  const done = s.done.filter(d => d.pr === pr && !d.repo);
+  // One line per issue, even from a state file written before finish could be run again safely.
+  const done = s.done.filter(d => d.pr === pr && !d.repo).reduce(withDone, []);
   const lines = [];
+  // What the sprint is on right now, first (claude-workflow#1): rewritten at begin as well as finish.
+  const now = nowLine(s, running);
+  if (now) lines.push(now, '');
   if (s.intro?.pr === pr) lines.push(s.intro.text.trim(), '');
   lines.push(...(done.length ? ['## Done',
     // Every finished issue closes on merge (maintainer, 2026-11-12), including one
@@ -268,7 +279,7 @@ function prBody(s, pr, running) {
     const there = s.done.filter(d => d.repo === name);
     if (there.length) lines.push('', `## In ${name}`, `${l.pr ? `${l.repo}#${l.pr}` : l.repo} holds these; its merge closes them:`, ...there.map(d => `- ${d.title ? `${d.title}: ` : ''}#${d.n}`));
   }
-  if (s.current) lines.push('', '## In progress', `- #${s.current.n}${s.current.repo ? ` (in ${s.current.repo})` : ''}${running ? `: being built now; it joins ${s.current.repo ? 'that repo\'s sprint PR' : 'this PR'} as its own commit when its checks pass` : ': not finished, kept off this PR (see its "Next" comment)'}`);
+  if (s.current && !running) lines.push('', '## In progress', `- #${s.current.n}${s.current.repo ? ` (in ${s.current.repo})` : ''}: not finished, kept off this PR (see its "Next" comment)`);
   if (s.skipped.length) lines.push('', '## Passed over', ...s.skipped.map(d => `- #${d.n}: ${d.why}`));
   // Each reading says when its windows reset, measured from that reading's own time.
   const usage = usageLines(s.readings, s.resets);
@@ -540,6 +551,42 @@ function named(s, queue, tree, avoid) {
 
 // ---------- commands ----------
 const s = readState();
+
+// Where a session's wall-clock time went (claude-workflow#2): every gap of
+// --min minutes (5) or more in this project's Claude Code transcripts from the
+// last --hours (12), with what it waited on, then the gh calls that were slow.
+// Tool names, command heads and times only; paste the output on the issue.
+if (action === 'stalls') {
+  const hours = Number(opt('hours')) || 12, minMinutes = Number(opt('min')) || 5;
+  const since = Date.now() - hours * 3600e3;
+  const projects = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'projects');
+  const slug = sh('git', ['rev-parse', '--show-toplevel']).replace(/[^A-Za-z0-9]/g, '-').toLowerCase();
+  let dir = null;
+  try { dir = readdirSync(projects).find(d => d.toLowerCase() === slug); } catch {}
+  if (!dir) { console.log(`no transcripts for this checkout under ${projects} (looked for ${slug})`); process.exit(1); }
+  const files = readdirSync(join(projects, dir)).filter(f => f.endsWith('.jsonl'))
+    .map(f => ({ f, at: statSync(join(projects, dir, f)).mtimeMs })).filter(x => x.at >= since).sort((a, b) => a.at - b.at);
+  if (!files.length) console.log(`no session in the last ${hours} h`);
+  for (const { f } of files) {
+    const entries = [];
+    for (const line of readFileSync(join(projects, dir, f), 'utf8').split('\n')) {
+      if (!line.includes('"timestamp"')) continue;
+      try { const e = JSON.parse(line); if (Date.parse(e.timestamp) >= since) entries.push(e); } catch {}
+    }
+    const steps = entries.filter(e => e.type === 'user' || e.type === 'assistant');
+    if (steps.length < 2) continue;
+    const spanMin = (Date.parse(steps.at(-1).timestamp) - Date.parse(steps[0].timestamp)) / 60000;
+    const stalls = findStalls(entries, { minMinutes });
+    console.log(`== session ${f.slice(0, 8)}: ${steps.length} steps, ${new Date(steps[0].timestamp).toLocaleString()} to ${new Date(steps.at(-1).timestamp).toLocaleTimeString()}`);
+    for (const g of stalls) console.log(`${new Date(g.at).toLocaleTimeString()}  ${String(g.minutes).padStart(4)} min  ${g.cause.padEnd(5)}  ${g.what}`);
+    for (const l of stallSummary(stalls, Math.round(spanMin))) console.log(l);
+  }
+  const GH_LOG = join(DIR, 'gh-slow.log');
+  let slow = [];
+  try { slow = readFileSync(GH_LOG, 'utf8').split('\n').filter(l => l && Date.parse(l.split(' ')[0]) >= since); } catch {}
+  console.log(slow.length ? `== gh calls over 5 s (${slow.length}):\n${slow.slice(-40).join('\n')}` : '== no gh call over 5 s logged');
+  process.exit(0);
+}
 
 if (action === 'budget') {
   if (flag('hook')) {
@@ -933,11 +980,14 @@ if (action === 'begin' || action === 'finish' || action === 'skip') {
       process.exit(4);
     }
   }
+  let beginTitle = null;
   const u = await usage(30);
   if (action === 'begin') {
     const b = judge(u, s);
     if (b.verdict === 'WRAP' || b.verdict === 'STOP') { console.log(`${b.line}\nNo new issue now: checkpoint instead.`); process.exit(6); }
-    const sizes = JSON.parse(sh('gh', ['issue', 'view', String(n), '--repo', REPO, '--json', 'labels'])).labels.map(l => l.name);
+    const viewed = JSON.parse(sh('gh', ['issue', 'view', String(n), '--repo', REPO, '--json', 'labels,title']));
+    beginTitle = viewed.title || null;
+    const sizes = viewed.labels.map(l => l.name);
     // --asked: the person asked for this issue now (maintainer, 2026-11-14), so the
     // fresh-window rule gives way; keep-going and the weekly room still hold.
     if (isLarge(sizes)) { const large = largeAllowed(u, s, flag('asked')); if (!large.ok) { console.log(`${b.line}\n#${n}: ${large.why}.`); process.exit(6); } }
@@ -948,13 +998,25 @@ if (action === 'begin' || action === 'finish' || action === 'skip') {
   }
   record(s, u, `${action} #${n}`);
   const used = u.error ? null : u.session;
-  if (action === 'begin') s.current = { n, at: new Date().toISOString(), sessionAtStart: used, weeklyAtStart: u.weekly ?? null, repo: linked ? where : null };
+  if (action === 'begin') s.current = { n, title: beginTitle, at: new Date().toISOString(), sessionAtStart: used, weeklyAtStart: u.weekly ?? null, repo: linked ? where : null };
   if (action === 'begin' && linked) {
     console.log(`#${n} is ${where} work: build it in ${linked.worktree} (branch ${linked.branch}), under that repo's CLAUDE.md, never in ${linked.checkout}.`);
     console.log(`Commit there as "<title> (${REPO}#${n})" with git -C "${linked.worktree}"; finish pushes it and opens or updates ${linked.repo}'s PR.`);
   }
   // Working again after a checkpoint: the PR says so at once, not at the next finish.
-  if (action === 'begin' && !s.external) { try { const pr = openPr(s.branch); if (pr) sprintLabel(pr.number, RUNNING); } catch { /* the label is cosmetic; never block the work on it */ } }
+  // And its body names the issue now being built (claude-workflow#1): one pr edit, no push.
+  if (action === 'begin' && !s.external) {
+    try {
+      const pr = openPr(s.branch);
+      if (pr) {
+        sprintLabel(pr.number, RUNNING);
+        writeState(s);
+        const file = join(DIR, 'pr.md');
+        writeFileSync(file, prBody(s, pr.number, true));
+        sh('gh', ['pr', 'edit', String(pr.number), '--repo', REPO, '--body-file', file], true);
+      }
+    } catch { /* the label and the line are for people watching; never block the work on them */ }
+  }
   if (action === 'finish') {
     const start = s.current?.n === n ? s.current : null;
     const took = issueUsage(start, u);
@@ -966,26 +1028,35 @@ if (action === 'begin' || action === 'finish' || action === 'skip') {
     // e2e fixtures), but nobody has run it on a real application site yet.
     let title = null;
     try { title = sh('gh', ['issue', 'view', String(n), '--repo', REPO, '--json', 'title', '--jq', '.title']); } catch { /* the PR line goes without it */ }
-    s.done.push({ n, title, at: new Date().toISOString(), cost, weeklyCost: took.weekly, ...((flag('needs-live') || flag('needs-device')) && { device: true }), ...(linked && { repo: where }) });
+    const again = s.done.find(d => d.n === n && (d.repo || null) === (linked ? where : null));
+    s.done = withDone(s.done, { n, title, at: new Date().toISOString(), cost, weeklyCost: took.weekly, ...((flag('needs-live') || flag('needs-device')) && { device: true }), ...(linked && { repo: where }) });
+    if (again) console.log(`#${n} was finished before (that run stopped half way): its line is replaced, not repeated${again.reviewed ? ', and its In Review note is not posted twice' : ''}`);
     s.current = null;
     writeState(s);
     console.log(`#${n} done${cost !== null ? `, cost ${cost}% of the 5-hour window` : ''}`);
     const work = join(sh('git', ['rev-parse', '--show-toplevel']), '.claude', 'skills', `${PREFIX}-issues`, 'work.mjs');
+    const entry = () => s.done.find(d => d.n === n && (d.repo || null) === (linked ? where : null));
+    const review = note => {
+      if (entry()?.reviewed) { console.log(`#${n}: In Review already (an earlier finish got that far)`); return; }
+      console.log(sh(process.execPath, [work, 'review', String(n), '--note', note]));
+      entry().reviewed = true;
+      writeState(s);
+    };
     if (linked) {
       // That repo's branch and PR (#57); this repo's PR then lists it under "In <name>".
       const pr = publishLinked(s, where, true);
       console.log(`pushed ${linked.branch} in ${where}; ${linked.repo}#${pr} updated`);
       try { const own = publish(s, true); if (own) console.log(`${REPO_NAME} PR #${own} now lists it`); } catch (e) { console.log(`(could not update this repo's PR: ${String(e.message).split('\n')[0]})`); }
-      console.log(sh(process.execPath, [work, 'review', String(n), '--note', `${opt('note')}; ${linked.repo}#${pr}${usageLine ? `; ${usageLine}` : ''}`]));
+      review(`${opt('note')}; ${linked.repo}#${pr}${usageLine ? `; ${usageLine}` : ''}`);
     } else if (s.external) {
       // The commit and its PR are the other repo's (already pushed there, under
       // that repo's own rule); here only the card moves, with the PR's address.
-      console.log(sh(process.execPath, [work, 'review', String(n), '--note', `${opt('note')}; ${opt('pr')}${usageLine ? `; ${usageLine}` : ''}`]));
+      review(`${opt('note')}; ${opt('pr')}${usageLine ? `; ${usageLine}` : ''}`);
     } else {
       // Straight onto the PR and into In Review (maintainer, 2026-11-13), not at the checkpoint.
       const pr = publish(s, true);
       console.log(`pushed; PR #${pr} updated ("${RUNNING}": CI waits for the checkpoint)`);
-      console.log(sh(process.execPath, [work, 'review', String(n), '--note', `${opt('note')}; PR #${pr}${usageLine ? `; ${usageLine}` : ''}`]));
+      review(`${opt('note')}; PR #${pr}${usageLine ? `; ${usageLine}` : ''}`);
     }
   }
   if (action === 'skip') {
@@ -1118,5 +1189,5 @@ if (action === 'end') {
   process.exit(0);
 }
 
-console.log('usage: sprint.mjs start|budget [--hook]|next|sizes|link [repo]|begin N|finish N --note "…"|checkpoint|ask "…"|skip N --why "…"|wind-down [--undo]|status|summary|end');
+console.log('usage: sprint.mjs start|budget [--hook]|next|sizes|link [repo]|begin N|finish N --note "…"|checkpoint|ask "…"|skip N --why "…"|wind-down [--undo]|status|summary|stalls [--hours 12] [--min 5]|end');
 process.exit(1);

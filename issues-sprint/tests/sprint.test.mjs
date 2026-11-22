@@ -204,3 +204,63 @@ test('answers are the comments after the last decisions post, minus the ones see
   assert.deepEqual(answersSince(list, '2026-11-20T14:00:00Z').map(c => c.body), ['2 keep main']);
   assert.deepEqual(answersSince(list.slice(0, 1)), []);
 });
+
+import { nowLine, withDone, findStalls, stallSummary, toolLabel } from '../skills/__P__-sprint/verdict.mjs';
+
+test('the PR names the issue being built while the sprint runs, and drops the line at a checkpoint', () => {
+  const at = new Date(Date.now() - 42 * 60000).toISOString();
+  const s = { current: { n: 723, title: 'Android: TikTok in Follow us', at }, done: [] };
+  const line = nowLine(s, true);
+  assert.match(line, /^\*\*Now working on:\*\* #723 Android: TikTok in Follow us · since /);
+  assert.match(line, /\(42 min at the last update\)$/);
+  assert.match(nowLine({ current: null, done: [{ n: 1, at }] }, true), /^\*\*Now:\*\* between issues \(last one finished /);
+  assert.equal(nowLine({ current: null, done: [] }, true), '**Now:** between issues');
+  assert.equal(nowLine(s, false), null, 'a checkpointed PR has no Now line');
+  assert.match(nowLine({ current: { n: 5, at: new Date(Date.now() - 125 * 60000).toISOString() } }, true), /2 h 05 min/);
+});
+
+test('a finish run again replaces its own line and keeps what the first run knew', () => {
+  const first = withDone([{ n: 1, cost: 2 }], { n: 716, title: 'Android: Follow us', cost: 3, weeklyCost: 1 });
+  const marked = first.map(d => (d.n === 716 ? { ...d, reviewed: true } : d));
+  const again = withDone(marked, { n: 716, title: 'Android: Follow us', cost: null, weeklyCost: null, device: true });
+  assert.equal(again.length, 2, 'no second #716 line');
+  assert.deepEqual(again[1], { n: 716, title: 'Android: Follow us', cost: 3, weeklyCost: 1, reviewed: true, device: true });
+  assert.equal(withDone(again, { n: 716, repo: 'other' }).length, 3, 'the same number in a linked repo is another issue');
+});
+
+// Transcript lines as Claude Code writes them (only the fields the finder reads).
+const t0 = Date.parse('2026-11-22T06:00:00Z');
+const at = min => new Date(t0 + min * 60000).toISOString();
+const toolUse = (min, name, input) => ({ type: 'assistant', timestamp: at(min), message: { content: [{ type: 'tool_use', name, input }] } });
+const result = min => ({ type: 'user', timestamp: at(min), message: { content: [{ type: 'tool_result', content: 'x' }] } });
+const reply = min => ({ type: 'assistant', timestamp: at(min), message: { content: [{ type: 'text', text: 'done' }] } });
+const prompt = (min, text) => ({ type: 'user', timestamp: at(min), message: { content: text } });
+
+test('stalls: a hung tool, an ended turn and a slow reply are told apart', () => {
+  const entries = [
+    prompt(0, 'go'),
+    toolUse(1, 'Bash', { command: 'node .claude/skills/x-sprint/sprint.mjs finish 723 --note "Android: a TikTok row"' }),
+    result(25),                                         // the finish hung for 24 min
+    toolUse(26, 'Bash', { command: './gradlew :app:testDebugUnitTest', run_in_background: true }),
+    result(26),
+    toolUse(27, 'ScheduleWakeup', { delaySeconds: 3300 }),
+    result(27),
+    reply(27),                                          // the turn ends here
+    prompt(82, '<command-name>/x-sprint</command-name> keep going'),
+    reply(90),                                          // 8 min for a reply
+    { type: 'assistant', timestamp: at(60), isSidechain: true, message: { content: [{ type: 'text', text: 'a subagent' }] } },
+  ];
+  const stalls = findStalls(entries, { minMinutes: 5 });
+  assert.deepEqual(stalls.map(g => [g.minutes, g.cause]), [[24, 'tool'], [55, 'idle'], [8, 'model']]);
+  assert.match(stalls[0].what, /^Bash: node \.claude\/skills\/x-sprint\/sprint\.mjs finish 723/);
+  assert.match(stalls[1].what, /the turn ended with ScheduleWakeup 3300 s, leaving Bash: \.\/gradlew :app:testDebugUnitTest \(in the background\); woken by the loop prompt/);
+  const summary = stallSummary(stalls, 90).join('\n');
+  assert.match(summary, /^session span: 1 h 30 min\nidle, the turn had ended: 55 min\nwaiting on a tool: 24 min\nwaiting on Claude's reply: 8 min\nlongest:/);
+});
+
+test('stalls: labels say what ran, never what a file or message held', () => {
+  assert.equal(toolLabel({ name: 'Write', input: { file_path: 'C:/repo/app/secret-plan.md', content: 'private' } }), 'Write: secret-plan.md');
+  assert.equal(toolLabel({ name: 'ScheduleWakeup', input: { stop: true } }), 'ScheduleWakeup stop');
+  assert.ok(toolLabel({ name: 'Bash', input: { command: 'x'.repeat(500) } }).length < 80);
+  assert.deepEqual(findStalls([prompt(0, 'a'), reply(1)], { minMinutes: 5 }), []);
+});
