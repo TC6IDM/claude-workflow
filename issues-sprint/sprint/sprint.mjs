@@ -32,8 +32,9 @@
 //                         it, and moves the issue to In Review (work.mjs review: the note + the PR).
 //                         --needs-live: nobody has tried it on a live job site yet. The PR still says Fixes
 //                         (the merge closes it, maintainer 2026-11-12) and adds that it is not yet seen.
-//   ... checkpoint [--title "…"] [--intro-file f.md]  Rewrite the PR (title, Claude's description
-//                         above the generated part, usage) and take the running label off: CI runs once.
+//   ... checkpoint [--title "…"] [--intro-file f.md] [--wake-in <seconds> | --next-wake <time>]  Rewrite the PR (title,
+//                         Claude's description above the generated part, usage) and take the running label off: CI runs once.
+//                         --wake-in / --next-wake: when the paused sprint wakes next, which the PR's last line names.
 //   ... sizes             What each size has cost, measured on the board ("Usage %", set by finish
 //                         from the 5-hour reading at begin and finish), and issues whose size label
 //                         looks wrong. `next` shows each candidate's expected cost from the same figures.
@@ -68,7 +69,7 @@ import { join, resolve } from 'node:path';
 import https from 'node:https';
 
 import { REPO, REPO_NAME, OWNER, PROJECT, MILESTONE_ORDER as MILESTONES, LINKED_REPOS, linkedRepoOf, NAME, PREFIX, NEEDS_LIVE_TEXT } from './repo.mjs';
-import { STALE_HOURS, KEEP_GOING_STALE_HOURS, DEFAULT_SMALL_AT, DEFAULT_NEW_AT, DEFAULT_STOP_AT, FABLE_LINES, LARGE_SESSION_AT, LARGE_WEEKLY_UNDER, DEFAULT_ISSUE_COST, defaultLines, until, judge, isLarge, largeAllowed, averageCost, finishRefusal, takenAway, USAGE_FIELD, MEASURED_AFTER, issueUsage, usageNote, sizeAverages, expectedCost, misSized, readingLine, usageLines, decisionsComment, answersSince, nowLine, withDone, findStalls, stallSummary, takeable, nothingLeft, TIERS, HANDED_OFF } from './verdict.mjs';
+import { STALE_HOURS, KEEP_GOING_STALE_HOURS, DEFAULT_SMALL_AT, DEFAULT_NEW_AT, DEFAULT_STOP_AT, FABLE_LINES, LARGE_SESSION_AT, LARGE_WEEKLY_UNDER, DEFAULT_ISSUE_COST, defaultLines, until, judge, isLarge, largeAllowed, averageCost, finishRefusal, takenAway, USAGE_FIELD, MEASURED_AFTER, issueUsage, usageNote, sizeAverages, expectedCost, misSized, readingLine, usageLines, decisionsComment, answersSince, nowLine, wakeAt, pauseLine, withDone, findStalls, stallSummary, takeable, nothingLeft, TIERS, HANDED_OFF } from './verdict.mjs';
 const DIR = join(tmpdir(), `${PREFIX}-sprint`);
 const STATE = join(DIR, 'state.json');
 const CACHE = join(DIR, 'usage.json');
@@ -288,7 +289,7 @@ function prBody(s, pr, running) {
   if (usage.length) lines.push('', ...usage);
   lines.push('', running
     ? `_The sprint is still running: each issue arrives as its own commit and its card moves to In Review. The "${RUNNING}" label holds CI back until the checkpoint takes it off (CI then runs once; take it off by hand to run CI sooner). It can be merged at any time; a later issue then opens a new PR._`
-    : '_The sprint has checkpointed: CI runs once on this state. Nothing more arrives unless it resumes after a usage reset._', '', ATTRIBUTION);
+    : pauseLine(s), '', ATTRIBUTION);
   return lines.join('\n');
 }
 
@@ -1197,6 +1198,9 @@ if (action === 'summary') {
 if (action === 'checkpoint') {
   if (opt('title')) s.title = opt('title');
   if (opt('intro-file') && !s.external) s.intro = { pr: openPr(s.branch)?.number ?? null, text: readFileSync(opt('intro-file'), 'utf8') };
+  // When the paused sprint wakes next, for the PR's last line (claude-workflow#4); none given, none said.
+  s.nextWake = wakeAt({ wakeIn: opt('wake-in'), nextWake: opt('next-wake') });
+  if ((opt('wake-in') || opt('next-wake')) && !s.nextWake) console.log('could not read --wake-in / --next-wake; the PR names no wake');
   const u = await usage(30);
   record(s, u, 'checkpoint');
   writeState(s);
@@ -1246,6 +1250,19 @@ if (action === 'checkpoint') {
 }
 
 if (action === 'end') {
+  // The PR's last line says the sprint ended and no wake follows (claude-workflow#4).
+  // Only the body changes: nothing is pushed, and a merged or closed PR is left alone.
+  const open = !s.external && s.pr ? openPr(s.branch) : null;
+  if (open) {
+    s.ended = true;
+    delete s.nextWake;
+    try {
+      const file = join(DIR, 'pr.md');
+      writeFileSync(file, prBody(s, open.number, false));
+      sh('gh', ['pr', 'edit', String(open.number), '--repo', REPO, '--body-file', file], true);
+      console.log(`PR #${open.number}: says the sprint ended`);
+    } catch (e) { console.log(`PR #${open.number}: could not say the sprint ended (${String(e.message).split('\n')[0]})`); }
+  }
   // A linked worktree goes once it is clean (its branch and commits stay); one with work left in it stays.
   for (const [name, l] of Object.entries(s.linked || {})) {
     try { sh('git', ['-C', l.checkout, 'worktree', 'remove', l.worktree], true); console.log(`${name}: worktree ${l.worktree} removed (branch ${l.branch} kept)`); }

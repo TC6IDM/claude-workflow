@@ -235,6 +235,31 @@ export function nowLine(s, running, now = Date.now()) {
   return `**Now:** between issues${last ? ` (last one finished ${clock(last)})` : ''}`;
 }
 
+// ---------- when a paused sprint wakes (claude-workflow#4) ----------
+/**
+ * The time of the next wake from checkpoint's --wake-in <seconds> or
+ * --next-wake <time>, as an ISO string, or null when neither is given or it
+ * cannot be read (the PR then says nothing about a wake rather than a wrong one).
+ */
+export function wakeAt({ wakeIn, nextWake } = {}, now = Date.now()) {
+  if (wakeIn != null && wakeIn !== '') {
+    const seconds = Number(wakeIn);
+    return Number.isFinite(seconds) && seconds > 0 ? new Date(now + seconds * 1000).toISOString() : null;
+  }
+  if (nextWake) {
+    const at = Date.parse(nextWake);
+    return Number.isFinite(at) ? new Date(at).toISOString() : null;
+  }
+  return null;
+}
+
+/** The last line of a sprint PR that is not running: ended, paused until a known wake, or checkpointed. */
+export function pauseLine(s) {
+  if (s?.ended) return '_The sprint has ended: no wake follows. Whatever is left is listed above; a new sprint picks it up._';
+  if (s?.nextWake) return `_The sprint is paused: next wake about ${clock(s.nextWake)} (${new Date(s.nextWake).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}). Then it reads the answers under its questions and the Inbox, and carries on._`;
+  return '_The sprint has checkpointed: CI runs once on this state. Nothing more arrives unless it resumes after a usage reset._';
+}
+
 // ---------- finish, run again after it died half way ----------
 /**
  * The done list with `entry` in it once. A `finish` that hung or died after it

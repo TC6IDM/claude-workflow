@@ -233,6 +233,11 @@ A checkpoint is a pause, not an end. In this order:
    **The questions go on the PR:** the same command posts every open question
    (`sprint.mjs ask`) as one comment on the PR, lettered options, the recommended
    one marked, the mock-ups link for a visual choice. Nothing open: no comment.
+   **A keep-going pause names its wake:** add `--wake-in <seconds>`, the same
+   delay section 4's `ScheduleWakeup` will get (`min(3300, resumeInSeconds)`
+   out of budget, 1800 with nothing left), and the PR's last line says when the
+   sprint wakes next and what it does then. Without it, the line says only that
+   the sprint checkpointed.
 4. **Issues:** finished ones are In Review already. One being given up gets a
    comment with a **Next** section and stays In Progress. Then `work.mjs tidy`.
 5. **Pausing (keep-going):** one line to the person (a push notification if the
@@ -241,7 +246,8 @@ A checkpoint is a pause, not an end. In this order:
    type `/compact`".
 6. **Ending** (wound down, or no keep-going): the summary (done, skipped and why,
    the PR, usage at start and end), **then every question collected**
-   (`sprint.mjs status`), then `sprint.mjs end`.
+   (`sprint.mjs status`), then `sprint.mjs end`, which rewrites the PR's last
+   line to say the sprint ended and no wake follows.
 
 ## 4. Keep going (only with `--keep-going`)
 

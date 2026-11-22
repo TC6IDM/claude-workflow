@@ -144,8 +144,11 @@ function archiveFinishedFamilies() {
   console.log(archived ? `${archived} done card(s) archived` : 'nothing done left on the board');
 }
 
-if (!['start', 'review', 'done'].includes(action) || !Number.isInteger(number)) {
-  console.error('usage: work.mjs start <issue> [--to <login>] | review <issue> --note "…" | done <issue> --note "…" | tidy | assign-down [issue]  [--dry]');
+// Every action handled below the issue lookup (claude-workflow#5: handoff was missing,
+// so every sprint handoff stopped here with the usage line).
+export const ISSUE_ACTIONS = ['start', 'review', 'done', 'handoff'];
+if (!ISSUE_ACTIONS.includes(action) || !Number.isInteger(number)) {
+  console.error('usage: work.mjs start <issue> [--to <login>] | review <issue> --note "…" | done <issue> --note "…" | handoff <issue> --note "…" | tidy | assign-down [issue]  [--dry]');
   process.exit(1);
 }
 

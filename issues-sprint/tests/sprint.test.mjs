@@ -311,3 +311,29 @@ test('the done line counts why every open issue was left', () => {
     'NOTHING LEFT on the board that this sprint can work on: 2 in review · 2 in progress · 1 waiting on a person (status:needs-decision) · 1 assigned to someone else.');
   assert.equal(nothingLeft([]), 'NOTHING LEFT on the board that this sprint can work on.');
 });
+
+import { wakeAt, pauseLine } from '../skills/__P__-sprint/verdict.mjs';
+import { readFileSync as readSource } from 'node:fs';
+
+test('a paused sprint PR names its next wake; an ended one says no wake follows (claude-workflow#4)', () => {
+  const now = Date.parse('2026-11-22T20:00:00Z');
+  assert.equal(wakeAt({ wakeIn: '3300' }, now), '2026-11-22T20:55:00.000Z');
+  assert.equal(wakeAt({ nextWake: '2026-11-23T04:50:00Z' }, now), '2026-11-23T04:50:00.000Z');
+  assert.equal(wakeAt({}, now), null, 'none given, none said');
+  assert.equal(wakeAt({ wakeIn: 'soon' }, now), null, 'an unreadable delay names no wake');
+  assert.equal(wakeAt({ wakeIn: '-5' }, now), null);
+  assert.equal(wakeAt({ nextWake: 'tomorrow-ish' }, now), null);
+  const paused = pauseLine({ nextWake: '2026-11-22T20:55:00.000Z' });
+  assert.match(paused, /^_The sprint is paused: next wake about .+\. Then it reads the answers under its questions and the Inbox, and carries on\._$/);
+  assert.match(pauseLine({ ended: true, nextWake: '2026-11-22T20:55:00.000Z' }), /^_The sprint has ended: no wake follows\./, 'ended wins over a stale wake');
+  assert.match(pauseLine({}), /^_The sprint has checkpointed:/);
+});
+
+test('work.mjs accepts every action it handles after the issue lookup, handoff included (claude-workflow#5)', () => {
+  const source = readSource(new URL('../skills/__P__-issues/work.mjs', import.meta.url), 'utf8');
+  const accepted = JSON.parse(source.match(/export const ISSUE_ACTIONS = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
+  const lookup = source.indexOf('const issue = ghJson(');
+  const handled = [...source.slice(lookup).matchAll(/action === '([a-z-]+)'/g)].map(m => m[1]);
+  assert.ok(handled.includes('handoff'));
+  for (const name of handled) assert.ok(accepted.includes(name), `work.mjs ${name} is handled but refused by the usage check`);
+});
