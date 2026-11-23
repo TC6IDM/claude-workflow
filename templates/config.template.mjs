@@ -56,6 +56,7 @@ export const LABELS = {
   'who:together': ['fef2c0', "Needs both: a real device, the owner's accounts"],
   'status:blocked': ['444444', 'Waiting on another issue or an account'],
   'status:needs-decision': ['f7c6c7', 'Cannot start until the owner decides'],
+  'needs:watched-session': ['5319e7', 'Edits .claude/ or CLAUDE.md: Claude Code asks before writing, so only with someone watching'],
   'inbox': ['ffffff', 'The pinned Inbox issue: raw ideas waiting to be turned into issues'],
   'area:devx': ['ededed', 'Developer tools, tests, CI, Claude skills'],
   'area:docs': ['ededed', 'CLAUDE.md, README, plans'],
