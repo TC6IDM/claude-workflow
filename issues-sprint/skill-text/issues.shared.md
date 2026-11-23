@@ -24,10 +24,8 @@ Don't log: questions answered on the spot, work finished in the same change
   parent epic too.
 - A sub-issue is made with `--parent <number>`; GitHub then shows it under the
   parent with a progress bar.
-- **Work that edits `.claude/` or `CLAUDE.md`** (skills, agents, hooks,
-  settings, the repo's instructions) also gets `needs:watched-session`: Claude
-  Code asks before each write there, so only a session someone watches can do
-  it, and unattended sprints leave it out on purpose (the PR says so).
+- `needs:watched-session` is put on by a sprint (`skip N --watched`) when a
+  permission question it asked on the PR got no answer; don't add it when logging.
 
 ## Commands
 

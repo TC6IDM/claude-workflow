@@ -74,7 +74,7 @@ sync.mjs         copies both halves into a repo; tests/ tests sync.mjs and the s
 |---|---|
 | `issues-sprint/issues/` | `create-issues`, `sync-board`, `work`, `inbox` (+ `inbox-rules`), `watch-video`, `bootstrap` (+ `board-plan`). The newest of the three copies (EzAutoApply's, which already had Ride The Bus's `--label`/`--external`/Fable lines and PTrainr's Inbox). |
 | `issues-sprint/sprint/` | `sprint.mjs`, `verdict.mjs`. `finish --needs-live` and `--needs-device` are the same flag. |
-| `issues-sprint/hooks/` | `guard.mjs` + `guard-rules.mjs`: the commit/push/merge rule as a PreToolUse hook; force-push denied; per-repo `GUARD_DENY` and `GUARD_ASK_ALWAYS` (below). |
+| `issues-sprint/hooks/` | `guard.mjs` + `guard-rules.mjs`: the commit/push/merge rule as a PreToolUse hook; force-push denied; per-repo `GUARD_DENY` and `GUARD_ASK_ALWAYS` (below). `permission.mjs` + `permission-rules.mjs`: a PermissionRequest hook that, during a sprint, asks a permission prompt on the PR, waits 15 minutes for allow/deny from someone with write access, and answers it (no answer: deny, and the sprint skips the issue on purpose). |
 | `issues-sprint/tests/` | 43 tests the three repos never had (guard, Inbox, sprint verdicts, board plan, config shape). |
 | `issues-sprint/skill-text/` | The shared text of the `<prefix>-issues` and `<prefix>-sprint` SKILL.md files, with `{{REPO}}`, `{{NAME}}`, `{{PREFIX}}`, `{{PROJECT_URL}}`, `{{NEEDS_LIVE_TEXT}}` filled from the repo's config. |
 | `design/visual-redesign/` | The redesign method: `skill.shared.md` (the loop), `references/` (comparison page, building, traps, audio auditions), `scripts/` (the layout sweep engine, the axe sweep, `replace.cjs`). |
@@ -93,7 +93,7 @@ sync.mjs         copies both halves into a repo; tests/ tests sync.mjs and the s
    examples: Ride The Bus, PTrainr and EzAutoApply each did this on 2026-11-19).
 3. `node sync.mjs <repo> [--design]` again: renders both SKILL.md files and writes the lock.
 4. Run `node --test ".claude/tests/*.test.mjs"` in the repo.
-5. Wire `.claude/settings.json` like the others: the PreToolUse guard (`.claude/hooks/guard.mjs`), the
+5. Wire `.claude/settings.json` like the others: the PreToolUse guard (`.claude/hooks/guard.mjs`), the PermissionRequest hook (`.claude/hooks/permission.mjs`, matcher `*`, `timeout` 1200: longer than its 15-minute wait), the
    `sprint.mjs budget --hook`, `precompact`, `aftercompact` and `statusline` hooks, and the Inbox
    `count --hook` on SessionStart. Paths do not change: the scripts land in `.claude/skills/<prefix>-issues`
    and `<prefix>-sprint`.
