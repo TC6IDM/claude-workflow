@@ -36,6 +36,12 @@ test('--init writes the repo-owned files, a second sync renders both SKILL.md fi
     assert.match(release, /^---\nname: demo-workflow-sync\n/);
     assert.ok(!/\{\{\w+\}\}/.test(release), 'the workflow-sync skill has every {{token}} filled');
     assert.match(release, /sync-all\.mjs --dry/);
+    // Every generated SKILL.md's description must be valid YAML: an unquoted one with ": " in it breaks the
+    // frontmatter, and the skill list shows the next line instead (0.10.0's workflow-sync did).
+    for (const s of ['demo-issues', 'demo-sprint', 'demo-workflow-sync']) {
+      const desc = readFileSync(join(repo, '.claude/skills', s, 'SKILL.md'), 'utf8').match(/^description: (.*)$/m)?.[1] ?? '';
+      assert.ok(/^(["']).*\1$/.test(desc) || !/: /.test(desc), `${s}: quote a description that holds ": "`);
+    }
     assert.ok(existsSync(join(repo, '.claude/workflow.lock.json')));
   } finally { rmSync(repo, { recursive: true, force: true }); }
 });

@@ -78,7 +78,8 @@ for (const r of repos.filter(r => !only || only.includes(r.name.toLowerCase())))
   // What the repo's main last synced, for the PR's list of changes.
   let was = null;
   try { was = JSON.parse(git(['show', 'origin/main:.claude/workflow.lock.json'], home)); } catch { /* a first sync */ }
-  if (was?.version === VERSION && String(was.commit).replace(/\+dirty$/, '') === COMMIT) { results.push([tag, `already at ${VERSION} on main`]); continue; }
+  // A dry run with library changes waiting has not made their commit yet: every repo would still get a PR.
+  if (!(dry && dirty) && was?.version === VERSION && String(was.commit).replace(/\+dirty$/, '') === COMMIT) { results.push([tag, `already at ${VERSION} on main`]); continue; }
   const open = JSON.parse(gh(['pr', 'list', '--repo', slug, '--state', 'open', '--json', 'number,headRefName,url', '--limit', '50']))
     .find(p => p.headRefName.startsWith('chore/claude-workflow'));
   const branch = open ? open.headRefName : `chore/claude-workflow-${VERSION}`;
