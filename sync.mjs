@@ -114,6 +114,9 @@ const issuesSkill = render('issues', join(ISSUES, 'SKILL.repo.md'));
 const sprintSkill = render('sprint', join(SPRINT, 'SKILL.repo.md'));
 if (issuesSkill) put(relOf(join(ISSUES, 'SKILL.md')), issuesSkill);
 if (sprintSkill) put(relOf(join(SPRINT, 'SKILL.md')), sprintSkill);
+// <prefix>-workflow-sync: wholly shared (no repo part), so the release itself is a skill in every repo.
+if (cfg) put(relOf(join(skillsDir, `${PREFIX}-workflow-sync`, 'SKILL.md')),
+  read(join(IS, 'skill-text', 'workflow-sync.md')).replace(/\{\{(PREFIX|NAME)\}\}/g, (m, k) => (k === 'PREFIX' ? PREFIX : cfg.NAME)));
 
 // ---- the visual-redesign method (design/) ----
 const designOn = flag('design') || cfg?.DESIGN === true || lock?.design === true;

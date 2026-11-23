@@ -1,0 +1,8 @@
+{
+  "_": "The repos sync-all.mjs keeps in step, with their checkouts' paths relative to this folder (the same table as README's 'Where the repos are').",
+  "repos": [
+    { "name": "PTrainr", "path": "../PTrainer/PTrainer" },
+    { "name": "Ride The Bus", "path": "../Ride-The-Bus-monorepo" },
+    { "name": "EzAutoApply", "path": "../EzAutoApply" }
+  ]
+}

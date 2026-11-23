@@ -32,6 +32,10 @@ test('--init writes the repo-owned files, a second sync renders both SKILL.md fi
     assert.match(skill, /^---\nname: demo-sprint/);
     assert.ok(!/\{\{\w+\}\}/.test(skill), 'every {{token}} is filled');
     assert.match(skill, /\/demo-sprint/);
+    const release = readFileSync(join(repo, '.claude/skills/demo-workflow-sync/SKILL.md'), 'utf8');
+    assert.match(release, /^---\nname: demo-workflow-sync\n/);
+    assert.ok(!/\{\{\w+\}\}/.test(release), 'the workflow-sync skill has every {{token}} filled');
+    assert.match(release, /sync-all\.mjs --dry/);
     assert.ok(existsSync(join(repo, '.claude/workflow.lock.json')));
   } finally { rmSync(repo, { recursive: true, force: true }); }
 });

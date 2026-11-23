@@ -43,17 +43,20 @@ Each repo says this in its own CLAUDE.md, under "Shared workflow library" (the t
 
 ```
 cd Desktop/claude-workflow
-# 1. edit issues-sprint/, design/ or templates/
-npm test                                  # the library's own tests (sync, the layout sweep)
-# 2. bump VERSION (patch for a fix, minor for a new option or script)
-git add -A && git commit -m "..." && git push        # with the owner's yes
-# 3. for each repo that uses it (a branch each; the repos are worktree-friendly):
-node sync.mjs ../Ride-The-Bus-monorepo            # prefix and design come from the repo's lock
-node sync.mjs ../PTrainer/PTrainer
-node sync.mjs ../EzAutoApply
-# 4. in each repo: run the shared tests, commit, PR
-node --test ".claude/tests/*.test.mjs"
+# 1. edit issues-sprint/, design/ or templates/; npm test
+# 2. look at the plan (changes nothing, asks nothing):
+node sync-all.mjs --dry
+# 3. one yes, then all of it: tests, VERSION bump, library commit + push, and in every repo of repos.json
+#    a sync branch (the open chore/claude-workflow* PR's, or a new one) in a temporary worktree,
+#    sync.mjs, the repo's shared tests, a commit, a push, and the PR opened or updated:
+node sync-all.mjs --message-file msg.txt --bump patch|minor [--only "PTrainr,EzAutoApply"]
 ```
+
+The commit guard asks once for `sync-all.mjs` (without `--dry`); that yes covers the whole run. It never
+touches a repo's `main` or the person's checkout, never force-pushes, never merges. A repo whose merge
+conflicts or whose tests fail is skipped and reported. In every repo the same steps are the
+`<prefix>-workflow-sync` skill ("sync the workflow"), which finds this folder beside the repo. By hand,
+one repo at a time, `node sync.mjs <repo>` still works (then the repo's tests, commit and PR as usual).
 
 The shared tests (`issues-sprint/tests/`) are copied into every repo and run there against that repo's own
 `config.mjs`, so a bad value in a config fails in that repo's CI-less `node --test` run, not in a sprint.
@@ -67,6 +70,7 @@ issues-sprint/   issues, Inbox, sprint, the commit guard, their tests, their SKI
 design/          the visual-redesign method: skill text, references, sweep engine, agents, third-party skill list
 templates/       starting files for a new repo (config, SKILL.repo.md files, the CLAUDE.md section)
 sync.mjs         copies both halves into a repo; tests/ tests sync.mjs and the sweep engine
+sync-all.mjs     releases the library and syncs every repo in repos.json, behind one yes
 ```
 
 
@@ -76,7 +80,7 @@ sync.mjs         copies both halves into a repo; tests/ tests sync.mjs and the s
 | `issues-sprint/sprint/` | `sprint.mjs`, `verdict.mjs`. `finish --needs-live` and `--needs-device` are the same flag. |
 | `issues-sprint/hooks/` | `guard.mjs` + `guard-rules.mjs`: the commit/push/merge rule as a PreToolUse hook; force-push denied; per-repo `GUARD_DENY` and `GUARD_ASK_ALWAYS` (below). `permission.mjs` + `permission-rules.mjs`: a PermissionRequest hook that, during a sprint, asks a permission prompt on the PR, waits 15 minutes for allow/deny from someone with write access, and answers it (no answer: deny, and the sprint skips the issue on purpose). |
 | `issues-sprint/tests/` | 43 tests the three repos never had (guard, Inbox, sprint verdicts, board plan, config shape). |
-| `issues-sprint/skill-text/` | The shared text of the `<prefix>-issues` and `<prefix>-sprint` SKILL.md files, with `{{REPO}}`, `{{NAME}}`, `{{PREFIX}}`, `{{PROJECT_URL}}`, `{{NEEDS_LIVE_TEXT}}` filled from the repo's config. |
+| `issues-sprint/skill-text/` | `workflow-sync.md`, the wholly shared `<prefix>-workflow-sync` skill (sync-all, step by step). The shared text of the `<prefix>-issues` and `<prefix>-sprint` SKILL.md files, with `{{REPO}}`, `{{NAME}}`, `{{PREFIX}}`, `{{PROJECT_URL}}`, `{{NEEDS_LIVE_TEXT}}` filled from the repo's config. |
 | `design/visual-redesign/` | The redesign method: `skill.shared.md` (the loop), `references/` (comparison page, building, traps, audio auditions), `scripts/` (the layout sweep engine, the axe sweep, `replace.cjs`). |
 | `design/agents/` | Starter `today-capture` and `visual-qa` agents (a repo fills in its servers and states). |
 | `design/third-party-skills.json`, `design/skills.mjs` | Which third-party design skills the method calls, by step, and unreviewed candidates. `node design/skills.mjs --repo <path>`. |
@@ -111,7 +115,7 @@ linkedRepoOf BOARD boardFields`, plus the guard's two options:
   rule would allow it (Ride The Bus and PTrainr). `false`: only main, upstream and a sprint's strays ask, and
   the owner's yes in chat plus allow rules cover the rest (EzAutoApply).
 
-## Where the repos are (2026-11-19)
+## Where the repos are (2026-11-19; `repos.json` holds the paths for sync-all)
 
 | Repo | Prefix | Design | Guard | Branch / PR |
 |---|---|---|---|---|
