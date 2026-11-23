@@ -268,8 +268,10 @@ A checkpoint is a pause, not an end. In this order:
 
 Under `/loop` (dynamic) a keep-going sprint never ends by itself; only a
 wind-down or closing the session ends it.
+- **Before every `ScheduleWakeup`:** `sprint.mjs wake <delaySeconds>`, so the PR's
+  top line names the next check-up (the owner, 2026-11-23).
 - **Out of budget:** `ScheduleWakeup` with `delaySeconds = min(3300, resumeInSeconds)`
-  from `sprint.mjs budget`, the same prompt, again on each wake until `GO` or
+  from `sprint.mjs budget` (its `WAKE:` line gives both commands), the same prompt, again on each wake until `GO` or
   `SMALL`. Each wake is one `budget` call (plus the Inbox pass when its line says
   so and the verdict isn't `STOP`). **3300 s, not 3600:** the prompt cache lives
   an hour, so a wake at 55 minutes reads the context at a tenth of the price.
