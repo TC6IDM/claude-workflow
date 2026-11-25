@@ -71,6 +71,7 @@ design/          the visual-redesign method: skill text, references, sweep engin
 templates/       starting files for a new repo (config, SKILL.repo.md files, the CLAUDE.md section)
 sync.mjs         copies both halves into a repo; tests/ tests sync.mjs and the sweep engine
 sync-all.mjs     releases the library and syncs every repo in repos.json, behind one yes
+.claude/skills/    workflow-sync: the release as a skill, for a session opened in this folder
 ```
 
 
@@ -86,6 +87,7 @@ sync-all.mjs     releases the library and syncs every repo in repos.json, behind
 | `design/third-party-skills.json`, `design/skills.mjs` | Which third-party design skills the method calls, by step, and unreviewed candidates. `node design/skills.mjs --repo <path>`. |
 | `templates/` | Starting `config.mjs`, the `SKILL.repo.md` files, the design repo part, and the CLAUDE.md section. |
 | `issues-sprint/examples/ezautoapply/` | EzAutoApply's repo-owned SKILL parts, as split from its old SKILL.md files. |
+| `.claude/skills/workflow-sync/` | The release (`sync-all.mjs`, one yes) as a skill for a Claude session opened in this folder: "sync all" here does what each repo's `<prefix>-workflow-sync` does from inside a repo. Not synced into the repos. |
 | `tests/` | `sync` and the layout sweep (it plants defects in fixture pages and checks the sweep reports them). `npm test`. |
 
 ## Adding a repo
