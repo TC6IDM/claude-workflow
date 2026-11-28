@@ -38,10 +38,17 @@ test('--init writes the repo-owned files, a second sync renders both SKILL.md fi
     assert.match(release, /sync-all\.mjs --dry/);
     // Every generated SKILL.md's description must be valid YAML: an unquoted one with ": " in it breaks the
     // frontmatter, and the skill list shows the next line instead (0.10.0's workflow-sync did).
-    for (const s of ['demo-issues', 'demo-sprint', 'demo-workflow-sync']) {
+    for (const s of ['demo-issues', 'demo-sprint', 'demo-workflow-sync', 'demo-untangle']) {
       const desc = readFileSync(join(repo, '.claude/skills', s, 'SKILL.md'), 'utf8').match(/^description: (.*)$/m)?.[1] ?? '';
       assert.ok(/^(["']).*\1$/.test(desc) || !/: /.test(desc), `${s}: quote a description that holds ": "`);
     }
+    // The untangle pass: its repo part comes from the template, the skill around the shared method.
+    const untangle = readFileSync(join(repo, '.claude/skills/demo-untangle/SKILL.md'), 'utf8');
+    assert.match(untangle, /^---\nname: demo-untangle\n/);
+    assert.ok(!/\{\{\w+\}\}/.test(untangle), 'the untangle skill has every {{token}} filled');
+    assert.match(untangle, /should these change together\?/);
+    assert.match(untangle, /## In this repo/, 'the repo part follows the shared method');
+    assert.match(untangle, /demo-issues\/work\.mjs/);
     assert.ok(existsSync(join(repo, '.claude/workflow.lock.json')));
   } finally { rmSync(repo, { recursive: true, force: true }); }
 });
@@ -55,6 +62,15 @@ test('the repo\'s own files survive a sync, and --check notices an edited shared
     assert.equal(sync(repo, '--check').status, 0, 'in sync');
     assert.equal(sync(repo).status, 0);
     assert.match(readFileSync(cfg, 'utf8'), /\/\/ mine/);
+    // The untangle repo part is the repo's: a sync keeps it and renders the skill from it.
+    const part = join(repo, '.claude/skills/demo-untangle/SKILL.repo.md');
+    writeFileSync(part, readFileSync(part, 'utf8') + '\n**Decision logs:** docs/mine/\n');
+    assert.equal(sync(repo).status, 0);
+    assert.match(readFileSync(part, 'utf8'), /docs\/mine/);
+    assert.match(readFileSync(join(repo, '.claude/skills/demo-untangle/SKILL.md'), 'utf8'), /docs\/mine/);
+    const lock = JSON.parse(readFileSync(join(repo, '.claude/workflow.lock.json'), 'utf8'));
+    assert.ok(!lock.files['.claude/skills/demo-untangle/SKILL.repo.md'], 'the repo part is not in the lock');
+    assert.ok(lock.files['.claude/skills/demo-untangle/SKILL.md'], 'the generated skill is');
 
     const work = join(repo, '.claude/skills/demo-issues/work.mjs');
     writeFileSync(work, readFileSync(work, 'utf8') + '\n// hand edit\n');

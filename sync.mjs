@@ -16,7 +16,7 @@
 //              config.mjs exports DESIGN = true get it on every sync.
 //
 // The repo owns: <prefix>-issues/config.mjs, <prefix>-issues/SKILL.repo.md,
-// <prefix>-sprint/SKILL.repo.md, and with design: <prefix>-visual-redesign/SKILL.repo.md,
+// <prefix>-sprint/SKILL.repo.md, <prefix>-untangle/SKILL.repo.md (written from its template when missing), and with design: <prefix>-visual-redesign/SKILL.repo.md,
 // <prefix>-visual-redesign/scripts/layout.config.mjs, .claude/agents/<prefix>-{today-capture,visual-qa}.md. Everything else this script writes is shared: change it HERE.
 // The prefix is read from the repo's existing `<prefix>-issues` folder, or the lock, or --prefix.
 //
@@ -118,6 +118,17 @@ if (sprintSkill) put(relOf(join(SPRINT, 'SKILL.md')), sprintSkill);
 if (cfg) put(relOf(join(skillsDir, `${PREFIX}-workflow-sync`, 'SKILL.md')),
   read(join(IS, 'skill-text', 'workflow-sync.md')).replace(/\{\{(PREFIX|NAME)\}\}/g, (m, k) => (k === 'PREFIX' ? PREFIX : cfg.NAME)));
 
+// <prefix>-untangle: the read-only untangle pass. Its repo part is the repo's own: a repo without one
+// gets the template on its next sync (fill in its "In this repo" section), and it is never touched again.
+const UNTANGLE = join(skillsDir, `${PREFIX}-untangle`);
+const untangleOwned = [[join(UNTANGLE, 'SKILL.repo.md'), 'templates/untangle.repo.template.md']];
+if (cfg) {
+  const [repoPart, tpl] = untangleOwned[0];
+  if (!existsSync(repoPart)) put(relOf(repoPart), read(join(HERE, tpl)).replaceAll('__P__', PREFIX));
+  const untangleSkill = render('untangle', repoPart);
+  if (untangleSkill) put(relOf(join(UNTANGLE, 'SKILL.md')), untangleSkill);
+}
+
 // ---- the visual-redesign method (design/) ----
 const designOn = flag('design') || cfg?.DESIGN === true || lock?.design === true;
 const designOwned = [
@@ -150,7 +161,7 @@ ${after.trim()}
 `);
   } else if (!have) console.log(`design: no ${relOf(repoPart)} yet: run with --design --init to write the repo-owned files.`);
 }
-const ownedAll = [...owned, ...(designOn ? designOwned : [])];
+const ownedAll = [...owned, ...untangleOwned, ...(designOn ? designOwned : [])];
 
 // ---- compare with what is there, and write ----
 const state = rel => { const p = join(REPO, rel); return existsSync(p) ? read(p) : null; };
